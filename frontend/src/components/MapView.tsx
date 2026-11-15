@@ -303,9 +303,9 @@ export const MapView: React.FC<MapViewProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Dynamic Heartbeat
             </span>
             <div className="flex items-center gap-1.5">
-              {activeTimelineDate && autoSync && (
-                <span className="text-[10px] text-rose-400 font-mono font-bold">
-                  {activeTimelineDate}
+              {activeTimelineDate && (
+                <span className="text-[11px] text-rose-400 font-mono font-bold bg-rose-950/70 border border-rose-800/80 px-2 py-0.5 rounded shadow">
+                  🗓️ {activeTimelineDate.slice(0, 4)} · {activeTimelineDate}
                 </span>
               )}
               <button
@@ -321,14 +321,15 @@ export const MapView: React.FC<MapViewProps> = ({
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-4 gap-1">
             {[
               { id: "harmonic", label: "Harmonic" },
               { id: "epoch_08", label: "🌱 Spring Flood" },
               { id: "epoch_14", label: "🌿 Summer Peak" },
               { id: "epoch_19", label: "🌾 Autumn Harvest" },
-              { id: "climate_2021_drought", label: "☀️ 2021 Drought" },
-              { id: "climate_2017_flood", label: "🌊 2017 Flood" },
+              { id: "climate_2017_flood", label: "🌊 '17 Flood" },
+              { id: "climate_2021_drought", label: "☀️ '21 Drought" },
+              { id: "climate_2023_snow", label: "❄️ '23 Snow" },
             ].map((s) => (
               <button
                 key={s.id}

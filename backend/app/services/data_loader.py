@@ -19,8 +19,8 @@ class SARDataLoader:
             png_path = os.path.join(region_dir, "heartbeat.png")
             
             if not os.path.exists(npz_path) or not os.path.exists(png_path):
-                from scripts.generate_dataset import generate_region_dataset
-                generate_region_dataset(region_id, width=500, height=500, num_dates=25, output_dir=self.data_root)
+                from scripts.generate_decadal_timelapse_frames import generate_region_gee_products
+                generate_region_gee_products(region_id, width=400, height=400)
 
             if os.path.exists(npz_path):
                 data = np.load(npz_path)
@@ -50,8 +50,15 @@ class SARDataLoader:
     def get_heartbeat_image(self, region_id: str, frame: Optional[str] = None) -> Optional[bytes]:
         region_dir = os.path.join(self.data_root, region_id)
         if frame:
-            # Check frames subdirectory for high-density multi-epoch sequence
             frame_clean = frame.replace(".png", "")
+            
+            # 1. Check decadal_frames subdirectory (244 individual calibrated frames)
+            decadal_subpath = os.path.join(region_dir, "decadal_frames", f"{frame_clean}.png")
+            if os.path.exists(decadal_subpath):
+                with open(decadal_subpath, "rb") as f:
+                    return f.read()
+
+            # 2. Check frames subdirectory for seasonal & climate anomaly sequence
             frame_subpath = os.path.join(region_dir, "frames", f"{frame_clean}.png")
             if os.path.exists(frame_subpath):
                 with open(frame_subpath, "rb") as f:

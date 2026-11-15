@@ -76,18 +76,9 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading, o
         // Map directly to 24 individual bi-weekly satellite radar photos
         frameId = `epoch_${String(activeStep % 24).padStart(2, "0")}`;
       } else {
-        // 10-Year Decadal Mode: map year & phenological phase + climate anomalies
-        const year = note.date.slice(0, 4);
-        const epochInYear = Math.min(23, Math.max(0, Math.floor((note.doy / 365.0) * 24)));
-        frameId = `epoch_${String(epochInYear).padStart(2, "0")}`;
-
-        if (year === "2017" && (note.doy < 150 || note.doy > 320)) {
-          frameId = "climate_2017_flood";
-        } else if (year === "2021") {
-          frameId = "climate_2021_drought";
-        } else if (year === "2023" && note.doy < 160) {
-          frameId = "climate_2023_snow";
-        }
+        // 10-Year Decadal Mode: each of the 244 steps has its own calibrated GEE satellite photo!
+        const decadalIdx = Math.min(243, Math.max(0, activeStep));
+        frameId = `decadal_${String(decadalIdx).padStart(3, "0")}`;
       }
       onActiveEpochChange(note.date, note.doy, frameId);
     }
@@ -324,9 +315,9 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading, o
             <div className="text-xs font-bold text-emerald-400">{currentNote.filter_cutoff_hz} Hz</div>
           </div>
           <div>
-            <div className="text-[10px] text-slate-500 uppercase">{isDecadal ? "Date" : "DOY"}</div>
+            <div className="text-[10px] text-slate-500 uppercase">Calendar Date</div>
             <div className="text-xs font-bold text-rose-400 truncate">
-              {isDecadal ? currentNote.date : `${currentNote.date.slice(5)} (${currentNote.doy})`}
+              {currentNote.date}
             </div>
           </div>
         </div>
@@ -335,9 +326,16 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading, o
       {/* Synchronized Time-Series Chart */}
       <div className="p-5 border-b border-slate-800 space-y-3">
         <div className="flex items-center justify-between text-xs font-medium text-slate-300">
-          <span>{isDecadal ? "10-Year Multi-Epoch Radar Timeline" : "Backscatter & Harmonic Curve"}</span>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-bold font-mono text-cyan-400 bg-cyan-950/90 px-2 py-0.5 rounded border border-cyan-800 shadow-sm">
+              🗓️ {currentNote.date ? currentNote.date.slice(0, 4) : "2024"}
+            </span>
+            <span className="text-xs text-slate-300 font-semibold">
+              {isDecadal ? "10-Year Decadal Pass" : "Seasonal Revisit Cycle"}
+            </span>
+          </div>
           <span className="text-[11px] text-cyan-400 font-mono">
-            Step {activeStep + 1}/{activeSeries.length} (Click chart to jump)
+            Step {activeStep + 1}/{activeSeries.length}
           </span>
         </div>
 
@@ -393,6 +391,29 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading, o
               <span className="text-[10px] text-slate-500 font-mono">
                 2016 – 2026
               </span>
+            )}
+          </div>
+
+          {/* Timeline Axis Year Markers */}
+          <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 px-0.5 pt-1">
+            {isDecadal ? (
+              <>
+                <span>'16</span>
+                <span>2018</span>
+                <span>2020</span>
+                <span>2022</span>
+                <span>2024</span>
+                <span>'26</span>
+              </>
+            ) : (
+              <>
+                <span>Jan</span>
+                <span>Mar</span>
+                <span>May</span>
+                <span>Jul</span>
+                <span>Sep</span>
+                <span>Nov</span>
+              </>
             )}
           </div>
         </div>
