@@ -88,33 +88,52 @@ def extract_time_series(region_id: str, project_id: str = None, sample_years: in
     aoi = get_aoi_geometry(ee, region_id)
     key_points = get_key_points(ee, region_id)
     
-    start_year = 2017
-    end_year = 2026 if not sample_years else min(2026, start_year + sample_years)
-    
-    # Generate bi-weekly date windows from Nov 2016 up to Nov 2026
+    # Generate exact bi-weekly intervals
     intervals = []
     if not sample_years:
+        # 10 full years: 2016-11-15 to 2026-11-15 (exactly 240 bi-weekly epochs)
+        # 2016 Nov 15 - Dec 31 (3 steps)
         intervals.append(("2016-11-15", "2016-11-30", "2016-11-22"))
         intervals.append(("2016-12-01", "2016-12-15", "2016-12-07"))
         intervals.append(("2016-12-16", "2016-12-31", "2016-12-23"))
         
-    start_year = 2017
-    end_year = 2027 if not sample_years else min(2027, start_year + sample_years)
-    
-    for y in range(start_year, end_year):
-        max_m = 11 if y == 2026 else 12
-        for m in range(1, max_m + 1):
-            intervals.append((f"{y}-{m:02d}-01", f"{y}-{m:02d}-15", f"{y}-{m:02d}-07"))
+        # 2017 through 2025 (9 full years x 24 steps = 216 steps)
+        for y in range(2017, 2026):
+            for m in range(1, 13):
+                intervals.append((f"{y}-{m:02d}-01", f"{y}-{m:02d}-15", f"{y}-{m:02d}-07"))
+                last_day = 28 if m == 2 else (30 if m in [4, 6, 9, 11] else 31)
+                intervals.append((f"{y}-{m:02d}-16", f"{y}-{m:02d}-{last_day}", f"{y}-{m:02d}-23"))
+                
+        # 2026 Jan to Oct (10 months x 2 = 20 steps)
+        for m in range(1, 11):
+            intervals.append((f"2026-{m:02d}-01", f"2026-{m:02d}-15", f"2026-{m:02d}-07"))
             last_day = 28 if m == 2 else (30 if m in [4, 6, 9, 11] else 31)
-            intervals.append((f"{y}-{m:02d}-16", f"{y}-{m:02d}-{last_day}", f"{y}-{m:02d}-23"))
+            intervals.append((f"2026-{m:02d}-16", f"2026-{m:02d}-{last_day}", f"2026-{m:02d}-23"))
+            
+        # 2026 Nov up to today (1 step)
+        intervals.append(("2026-11-01", "2026-11-15", "2026-11-08"))
+        
+        start_display = "2016-11-15"
+        end_display = "2026-11-15"
+        years_display = "10.0"
+    else:
+        start_year = 2017
+        end_year = start_year + sample_years
+        for y in range(start_year, end_year):
+            for m in range(1, 13):
+                intervals.append((f"{y}-{m:02d}-01", f"{y}-{m:02d}-15", f"{y}-{m:02d}-07"))
+                last_day = 28 if m == 2 else (30 if m in [4, 6, 9, 11] else 31)
+                intervals.append((f"{y}-{m:02d}-16", f"{y}-{m:02d}-{last_day}", f"{y}-{m:02d}-23"))
+        start_display = f"{start_year}-01-01"
+        end_display = f"{end_year}-12-31"
+        years_display = str(sample_years)
 
     total_steps = len(intervals)
-    years_span = end_year - start_year
     
     print("=" * 75)
     print(f" 📈 TIME SERIES EXTRACTION FOR {region_id.upper()}")
     print("=" * 75)
-    print(f"• Temporal Range:     {start_year}-01-01 to {end_year}-12-31 ({years_span} years)")
+    print(f"• Temporal Range:     {start_display} to {end_display} ({years_display} years)")
     print(f"• Total Epochs:       {total_steps} bi-weekly steps")
     print(f"• Sampling Locations: {len(key_points)} sites ({', '.join(key_points.keys())})")
     print("=" * 75)
