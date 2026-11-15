@@ -23,5 +23,5 @@ COPY . .
 # Expose Cloud Run default port
 EXPOSE 8080
 
-# Run FastAPI with Uvicorn respecting dynamic Cloud Run PORT
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# Run FastAPI with Uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

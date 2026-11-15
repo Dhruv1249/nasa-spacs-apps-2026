@@ -55,7 +55,7 @@ jobs:
           service: ${{ env.SERVICE_NAME }}
           image: ${{ env.GAR_LOCATION }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           region: ${{ env.REGION }}
-          flags: --allow-unauthenticated --memory=4Gi --cpu=2 --timeout=300 --concurrency=10 --min-instances=0 --max-instances=3
+          flags: --port=8080 --allow-unauthenticated --memory=4Gi --cpu=2 --timeout=300 --concurrency=10 --min-instances=0 --max-instances=3
 
       - name: Show Cloud Run Service URL
         run: |
