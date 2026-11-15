@@ -1,0 +1,47 @@
+[
+  {
+    "interval_index": 1,
+    "window": "2016-11-15 to 2016-11-30",
+    "scene_name": null,
+    "acquisition_time": "2016-11-27T01:58:54Z",
+    "polarization": "VV+VH",
+    "download_url": null,
+    "size_mb": 977.3376712799072
+  },
+  {
+    "interval_index": 2,
+    "window": "2016-12-01 to 2016-12-15",
+    "scene_name": null,
+    "acquisition_time": "2016-12-14T02:07:04Z",
+    "polarization": "VV+VH",
+    "download_url": null,
+    "size_mb": 966.6419343948364
+  },
+  {
+    "interval_index": 3,
+    "window": "2016-12-16 to 2016-12-31",
+    "scene_name": null,
+    "acquisition_time": "2016-12-26T02:06:58Z",
+    "polarization": "VV+VH",
+    "download_url": null,
+    "size_mb": 948.223729133606
+  },
+  {
+    "interval_index": 4,
+    "window": "2017-01-01 to 2017-01-15",
+    "scene_name": null,
+    "acquisition_time": "2017-01-14T01:58:38Z",
+    "polarization": "VV+VH",
+    "download_url": null,
+    "size_mb": 978.2010726928711
+  },
+  {
+    "interval_index": 5,
+    "window": "2017-01-16 to 2017-01-31",
+    "scene_name": null,
+    "acquisition_time": "2017-01-31T02:07:01Z",
+    "polarization": "VV+VH",
+    "download_url": null,
+    "size_mb": 956.9668579101562
+  }
+]
