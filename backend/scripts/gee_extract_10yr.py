@@ -27,6 +27,13 @@ def format_duration(seconds: float) -> str:
 def init_gee(project_id: str = None):
     """Initializes Earth Engine using user-supplied project or gcloud defaults."""
     import ee
+    import glob
+    
+    # Auto-detect ADC credentials from gcloud if not explicitly set
+    if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
+        legacy_adcs = glob.glob(os.path.expanduser("~/.config/gcloud/legacy_credentials/*/adc.json"))
+        if legacy_adcs:
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = legacy_adcs[0]
     
     # Priority: 1. CLI arg -> 2. Environment variable -> 3. None (gcloud default)
     proj = project_id or os.environ.get("EE_PROJECT_ID") or os.environ.get("GOOGLE_CLOUD_PROJECT")
