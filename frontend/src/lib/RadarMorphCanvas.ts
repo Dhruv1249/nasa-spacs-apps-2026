@@ -226,16 +226,32 @@ export class RadarMorphCanvas {
       this.executeTransition(img, dur);
     };
     img.src = url;
+
+    // Fast-path if already in browser HTTP cache
+    if (img.complete && img.naturalWidth > 0) {
+      this.imageCache.set(url, img);
+      this.executeTransition(img, dur);
+    }
   }
 
   private executeTransition(newImg: HTMLImageElement, durationMs: number) {
-    // If first image ever loaded, draw directly with zero transition
-    if (!this.currentImg) {
+    // If first image ever loaded or zero duration requested, paint immediately
+    if (!this.currentImg || durationMs === 0) {
       this.currentImg = newImg;
-      if (this.canvas.width !== newImg.naturalWidth && newImg.naturalWidth > 0) {
+      if (newImg.naturalWidth > 0 && (this.canvas.width !== newImg.naturalWidth || this.canvas.height !== newImg.naturalHeight)) {
         this.canvas.width = newImg.naturalWidth;
         this.canvas.height = newImg.naturalHeight;
       }
+
+      if (this.gl && this.program) {
+        if (this.texA) this.gl.deleteTexture(this.texA);
+        if (this.texB) this.gl.deleteTexture(this.texB);
+
+        this.texA = this.createGLTexture(newImg);
+        this.texB = this.createGLTexture(newImg);
+      }
+
+      this.reposition();
       this.renderFrame(1.0);
       return;
     }
