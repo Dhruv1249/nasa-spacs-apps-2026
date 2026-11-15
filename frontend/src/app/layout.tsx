@@ -3,7 +3,17 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Land Heartbeat | The Sound of the Land (NASA Space Apps)",
-  description: "Translating satellite Synthetic Aperture Radar (SAR) backscatter time series and phenological cycles into interactive acoustic music.",
+  description: "Translating satellite Synthetic Aperture Radar (SAR) polarimetry and decadal phenological dynamics into multi-sensory visualizations and acoustic sonification.",
+  keywords: [
+    "NASA Space Apps 2026",
+    "Synthetic Aperture Radar",
+    "SAR Sonification",
+    "Land Heartbeat",
+    "Sentinel-1",
+    "NISAR",
+    "Phenology",
+    "Earth Observation"
+  ],
 };
 
 export default function RootLayout({
@@ -12,8 +22,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-slate-950 text-slate-100 antialiased h-screen overflow-hidden">
+    <html lang="en" className="dark scroll-smooth">
+      <body className="bg-[#06090e] text-slate-100 antialiased min-h-screen selection:bg-sky-500/30 selection:text-sky-200">
         {children}
       </body>
     </html>

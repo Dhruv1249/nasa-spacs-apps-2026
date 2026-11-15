@@ -4,7 +4,25 @@ import React, { useEffect, useRef, useState } from "react";
 import { Region } from "@/types";
 import { getHeartbeatImageUrl } from "@/lib/api";
 import { RadarMorphCanvas } from "@/lib/RadarMorphCanvas";
-import { Layers, MapPin, Sparkles, Sliders, Globe, Eye, RotateCcw } from "lucide-react";
+import {
+  Layers,
+  MapPin,
+  Sparkles,
+  Sliders,
+  RotateCcw,
+  Satellite,
+  Radio,
+  Waves,
+  Play,
+  Pause,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Minus,
+  Info,
+  Clock,
+  Check
+} from "lucide-react";
 
 interface MapViewProps {
   region: Region;
@@ -12,46 +30,65 @@ interface MapViewProps {
   selectedCoords: { lat: number; lon: number } | null;
   timelineSeason?: string;
   activeTimelineDate?: string;
+  isPlaying?: boolean;
+  onTogglePlay?: () => void;
+  speed?: number;
+  onSpeedChange?: (newSpeed: number) => void;
+  onStepDelta?: (delta: number) => void;
 }
 
 const BASEMAPS = {
   hybrid: {
     id: "hybrid",
     name: "Google Satellite",
+    description: "High-resolution optical satellite & road labels",
     url: "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
     options: {
-      attribution: '&copy; Google Maps & NASA',
+      attribution: "&copy; Google Maps & NASA",
       maxZoom: 20,
     },
   },
   esriSat: {
     id: "esriSat",
     name: "ESRI Optical",
+    description: "World imagery with natural true-color terrain",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     options: {
-      attribution: '&copy; Esri, Maxar, Earthstar Geographics',
+      attribution: "&copy; Esri, Maxar, Earthstar Geographics",
       maxZoom: 19,
     },
   },
   dark: {
     id: "dark",
-    name: "Dark Canvas",
+    name: "Cartographic Slate",
+    description: "Clean muted base for maximum radar contrast",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     options: {
-      attribution: '&copy; Esri, HERE, Garmin',
+      attribution: "&copy; Esri, HERE, Garmin",
       maxZoom: 16,
     },
   },
   terrain: {
     id: "terrain",
     name: "Terrain Relief",
+    description: "Shaded elevation contour relief",
     url: "https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}",
     options: {
-      attribution: '&copy; Google Maps',
+      attribution: "&copy; Google Maps",
       maxZoom: 20,
     },
   },
 };
+
+const RADAR_EPOCHS = [
+  { id: "harmonic", label: "Harmonic Composite", category: "Synthetic Phenology", desc: "Phase-to-Hue HSV encoding" },
+  { id: "epoch_08", label: "Spring Inundation (DOY 120)", category: "Seasonal Cycle", desc: "Specular water reflection minimum" },
+  { id: "epoch_14", label: "Peak Canopy Biomass (DOY 210)", category: "Seasonal Cycle", desc: "Maximum volumetric VH scattering" },
+  { id: "epoch_19", label: "Harvest Stubble (DOY 280)", category: "Seasonal Cycle", desc: "Rapid biomass drop & stubble scattering" },
+  { id: "climate_2017_flood", label: "2017 Atmospheric River Inundation", category: "Climate Anomaly", desc: "Historic California flood inundation" },
+  { id: "climate_2021_drought", label: "2021 Severe California Drought", category: "Climate Anomaly", desc: "Suppressed amplitude & fallowed acreage" },
+  { id: "climate_2023_snow", label: "2023 Sierra Snowpack Runoff", category: "Climate Anomaly", desc: "Unprecedented snowmelt runoff surge" },
+];
 
 export const MapView: React.FC<MapViewProps> = ({
   region,
@@ -59,6 +96,11 @@ export const MapView: React.FC<MapViewProps> = ({
   selectedCoords,
   timelineSeason,
   activeTimelineDate,
+  isPlaying = false,
+  onTogglePlay,
+  speed = 0.5,
+  onSpeedChange,
+  onStepDelta,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -73,12 +115,14 @@ export const MapView: React.FC<MapViewProps> = ({
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75);
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
 
+  // Active Tool Panel Popover on Left Dock
+  const [activePanel, setActivePanel] = useState<"layers" | "basemap" | "opacity" | "presets" | "legend" | null>(null);
+
   const onPointSelectedRef = useRef(onPointSelected);
   useEffect(() => {
     onPointSelectedRef.current = onPointSelected;
   }, [onPointSelected]);
 
-  // Auto-update radar season when timeline playhead advances if autoSync is active
   useEffect(() => {
     if (autoSync && timelineSeason && timelineSeason !== radarSeason) {
       setRadarSeason(timelineSeason);
@@ -89,9 +133,7 @@ export const MapView: React.FC<MapViewProps> = ({
   useEffect(() => {
     if (typeof window === "undefined" || !mapContainerRef.current) return;
 
-    // Dynamically import Leaflet
     import("leaflet").then((L) => {
-      // Fix default marker icon assets
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
@@ -106,13 +148,10 @@ export const MapView: React.FC<MapViewProps> = ({
           zoomControl: false,
         });
 
-        L.control.zoom({ position: "bottomright" }).addTo(map);
-
         const currentBm = BASEMAPS[basemapKey];
         const tile = L.tileLayer(currentBm.url, currentBm.options).addTo(map);
         tileLayerRef.current = tile;
 
-        // Click handler to sonify
         map.on("click", (e: any) => {
           if (onPointSelectedRef.current) {
             onPointSelectedRef.current(e.latlng.lat, e.latlng.lng);
@@ -152,7 +191,7 @@ export const MapView: React.FC<MapViewProps> = ({
     });
   }, [basemapKey, mapLoaded]);
 
-  // Initialize Map layers & Footprint Border on Region change
+  // Footprint border and radar canvas on region change
   useEffect(() => {
     if (!mapLoaded || !mapInstanceRef.current) return;
 
@@ -160,7 +199,6 @@ export const MapView: React.FC<MapViewProps> = ({
       const map = mapInstanceRef.current;
       map.flyTo([region.center[1], region.center[0]], region.zoom, { duration: 1.5 });
 
-      // Remove existing footprint border
       if (borderRef.current) map.removeLayer(borderRef.current);
 
       const [min_lon, min_lat, max_lon, max_lat] = region.bounds;
@@ -169,17 +207,15 @@ export const MapView: React.FC<MapViewProps> = ({
         [max_lat, max_lon],
       ];
 
-      // Outline the satellite radar coverage area
       const border = L.rectangle(bounds, {
-        color: "#06b6d4",
+        color: "#f87060",
         weight: 1.8,
-        dashArray: "6, 6",
+        dashArray: "4, 6",
         fill: false,
         interactive: false,
       }).addTo(map);
       borderRef.current = border;
 
-      // Initialize or update GPU Radar Morph Canvas
       const frameParam = radarSeason === "harmonic" ? undefined : radarSeason;
       const initialUrl = getHeartbeatImageUrl(region.id, frameParam);
 
@@ -197,23 +233,19 @@ export const MapView: React.FC<MapViewProps> = ({
     });
   }, [region, mapLoaded]);
 
-  // Dynamic GPU Pixel Morph Transition between satellite radar photos
   useEffect(() => {
     if (!morphCanvasRef.current) return;
-
     const frameParam = radarSeason === "harmonic" ? undefined : radarSeason;
     const nextUrl = getHeartbeatImageUrl(region.id, frameParam);
     morphCanvasRef.current.transitionToUrl(nextUrl, 320);
   }, [radarSeason, region.id]);
 
-  // Update overlay opacity dynamically
   useEffect(() => {
     if (morphCanvasRef.current) {
       morphCanvasRef.current.setOpacity(overlayOpacity);
     }
   }, [overlayOpacity]);
 
-  // Update marker position when selected coordinates change
   useEffect(() => {
     if (!mapLoaded || !mapInstanceRef.current || !selectedCoords) return;
 
@@ -224,7 +256,10 @@ export const MapView: React.FC<MapViewProps> = ({
       } else {
         const pulsingIcon = L.divIcon({
           className: "custom-pulse-marker",
-          html: `<div class="w-6 h-6 rounded-full bg-cyan-400/30 border-2 border-cyan-400 flex items-center justify-center animate-ping"></div><div class="w-3 h-3 rounded-full bg-cyan-400 absolute top-1.5 left-1.5 shadow-lg shadow-cyan-500"></div>`,
+          html: `
+            <div class="w-6 h-6 rounded-full bg-coral/30 border border-coral flex items-center justify-center animate-ping"></div>
+            <div class="w-3 h-3 rounded-full bg-navy absolute top-[6px] left-[6px] shadow-md border-2 border-white"></div>
+          `,
           iconSize: [24, 24],
           iconAnchor: [12, 12],
         });
@@ -236,181 +271,405 @@ export const MapView: React.FC<MapViewProps> = ({
     });
   }, [selectedCoords, mapLoaded]);
 
-  // Presets
+  // Technical Presets without emojis
   const presets = region.id === "sacramento"
     ? [
-        { name: "🌾 Rice Paddy Basin", lat: 38.835, lon: -121.725 },
-        { name: "💧 Sacramento River", lat: 38.805, lon: -121.685 },
-        { name: "🌳 Walnut Orchard", lat: 38.740, lon: -121.780 },
-        { name: "🏙️ Urban Woodland", lat: 38.695, lon: -121.770 },
+        { name: "Sacramento Rice Basin", category: "Single-Season Inundation", lat: 38.835, lon: -121.725 },
+        { name: "Sacramento Riverway", category: "Hydrological Specular Corridor", lat: 38.805, lon: -121.685 },
+        { name: "Woodland Orchard Basin", category: "Permanent Woody Canopy", lat: 38.740, lon: -121.780 },
+        { name: "Urban Infrastructure", category: "Double-Bounce Corner Matrix", lat: 38.695, lon: -121.770 },
       ]
     : [
-        { name: "🌾 Wheat-Rice Field", lat: 30.910, lon: 75.830 },
-        { name: "💧 Sutlej River", lat: 30.980, lon: 75.860 },
-        { name: "🌿 Canal Irrigation", lat: 30.840, lon: 75.760 },
-        { name: "🏙️ Ludhiana Cluster", lat: 30.895, lon: 75.920 },
+        { name: "Punjab Double-Crop Parcel", category: "Intensive Kharif-Rabi Rotation", lat: 30.910, lon: 75.830 },
+        { name: "Sutlej River Corridor", category: "Perennial Hydrological System", lat: 30.980, lon: 75.860 },
+        { name: "Sirhind Feeder Canal", category: "Monsoon Irrigation Conduit", lat: 30.840, lon: 75.760 },
+        { name: "Ludhiana Industrial Cluster", category: "Urban Settlement Complex", lat: 30.895, lon: 75.920 },
       ];
 
+  const handleZoomIn = () => {
+    if (mapInstanceRef.current) mapInstanceRef.current.zoomIn();
+  };
+
+  const handleZoomOut = () => {
+    if (mapInstanceRef.current) mapInstanceRef.current.zoomOut();
+  };
+
+  const handleResetView = () => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo([region.center[1], region.center[0]], region.zoom, { duration: 1.2 });
+    }
+  };
+
   return (
-    <div className="relative w-full h-full flex flex-col">
-      {/* Map Container */}
-      <div ref={mapContainerRef} className="w-full h-full z-0 bg-slate-950" />
+    <div className="relative w-full h-full flex flex-col overflow-hidden bg-canvas">
+      {/* Map Canvas */}
+      <div ref={mapContainerRef} className="w-full h-full z-0 bg-canvas" />
 
-      {/* Floating Controls Bar */}
-      <div className="absolute top-4 left-4 z-10 flex flex-col space-y-2 pointer-events-auto">
-        {/* Basemap Switcher */}
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-1.5 shadow-xl flex items-center space-x-1">
-          {(Object.keys(BASEMAPS) as (keyof typeof BASEMAPS)[]).map((key) => (
-            <button
-              key={key}
-              onClick={() => setBasemapKey(key)}
-              className={`px-2.5 py-1 text-xs rounded-lg font-medium transition ${
-                basemapKey === key
-                  ? "bg-cyan-500 text-slate-950 font-bold shadow"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
-            >
-              {BASEMAPS[key].name}
-            </button>
-          ))}
+      {/* Aerospace Docked Tool Palette (Left) */}
+      <div className="absolute top-4 left-4 z-20 flex flex-col space-y-2 pointer-events-auto">
+        <div className="glass-panel rounded-xl p-1 shadow-lg flex flex-col space-y-1 bg-white/95 border border-ice text-navy">
+          <button
+            onClick={handleZoomIn}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-sand-dark hover:text-navy hover:bg-canvas-subtle transition"
+            title="Zoom in"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+          <div className="h-px bg-ice mx-1" />
+          <button
+            onClick={handleZoomOut}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-sand-dark hover:text-navy hover:bg-canvas-subtle transition"
+            title="Zoom out"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        {/* Dynamic Heartbeat Season & Decadal Anomaly Switcher */}
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-2 shadow-xl space-y-1.5">
-          <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Dynamic Heartbeat
-              <span className="text-[9px] text-cyan-400 font-mono bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800/80 shadow-sm">
-                🌊 Morph
-              </span>
-            </span>
-            <div className="flex items-center gap-1.5">
-              {activeTimelineDate && (
-                <span className="text-[11px] text-rose-400 font-mono font-bold bg-rose-950/70 border border-rose-800/80 px-2 py-0.5 rounded shadow">
-                  🗓️ {activeTimelineDate.slice(0, 4)} · {activeTimelineDate}
-                </span>
-              )}
-              <button
-                onClick={() => setAutoSync(!autoSync)}
-                className={`text-[10px] px-1.5 py-0.5 rounded border transition flex items-center gap-1 ${
-                  autoSync
-                    ? "bg-cyan-950/90 text-cyan-400 border-cyan-800 shadow"
-                    : "bg-slate-800 text-slate-400 border-slate-700 hover:text-white"
-                }`}
-                title="Automatically updates map layer with audio playhead"
-              >
-                Auto-Sync {autoSync ? "ON" : "OFF"}
-              </button>
-            </div>
-          </div>
-          <div className="grid grid-cols-4 gap-1">
-            {[
-              { id: "harmonic", label: "Harmonic" },
-              { id: "epoch_08", label: "🌱 Spring Flood" },
-              { id: "epoch_14", label: "🌿 Summer Peak" },
-              { id: "epoch_19", label: "🌾 Autumn Harvest" },
-              { id: "climate_2017_flood", label: "🌊 '17 Flood" },
-              { id: "climate_2021_drought", label: "☀️ '21 Drought" },
-              { id: "climate_2023_snow", label: "❄️ '23 Snow" },
-            ].map((s) => (
-              <button
-                key={s.id}
-                onClick={() => {
-                  setRadarSeason(s.id);
-                  setAutoSync(false);
-                }}
-                className={`px-2 py-1 text-[11px] font-medium rounded transition ${
-                  radarSeason === s.id
-                    ? "bg-cyan-500 text-slate-950 font-bold shadow"
-                    : "bg-slate-800/70 hover:bg-slate-700 text-slate-300"
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <div className="glass-panel rounded-xl p-1 shadow-lg flex flex-col space-y-1 bg-white/95 border border-ice text-navy">
+          <button
+            onClick={() => setActivePanel(activePanel === "layers" ? null : "layers")}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition ${
+              activePanel === "layers"
+                ? "bg-coral text-white font-bold shadow-sm shadow-coral/30"
+                : "text-sand-dark hover:text-navy hover:bg-canvas-subtle"
+            }`}
+            title="Satellite Radar Layers &amp; Phenology"
+          >
+            <Satellite className="w-3.5 h-3.5" />
+          </button>
 
-        {/* Layer Opacity Controller */}
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-3 shadow-xl flex items-center space-x-3 text-xs">
-          <Sliders className="w-4 h-4 text-cyan-400" />
-          <span className="text-slate-300 font-medium">Heartbeat Overlay:</span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={overlayOpacity}
-            onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))}
-            className="w-24 accent-cyan-400 cursor-pointer"
-          />
-          <span className="text-slate-400 w-8 text-right">
-            {Math.round(overlayOpacity * 100)}%
-          </span>
-        </div>
+          <button
+            onClick={() => setActivePanel(activePanel === "basemap" ? null : "basemap")}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition ${
+              activePanel === "basemap"
+                ? "bg-coral text-white font-bold shadow-sm shadow-coral/30"
+                : "text-sand-dark hover:text-navy hover:bg-canvas-subtle"
+            }`}
+            title="Basemaps (Optical, Terrain, Slate)"
+          >
+            <Layers className="w-3.5 h-3.5" />
+          </button>
 
-        {/* Quick Jump Presets */}
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-2.5 shadow-xl">
-          <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Acoustic Presets
-          </div>
-          <div className="flex flex-wrap gap-1.5 max-w-xs">
-            {presets.map((p) => (
-              <button
-                key={p.name}
-                onClick={() => onPointSelected(p.lat, p.lon)}
-                className="px-2.5 py-1 text-xs bg-slate-800/80 hover:bg-cyan-500 hover:text-slate-950 text-slate-200 rounded-md border border-slate-700/60 transition"
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={() => setActivePanel(activePanel === "opacity" ? null : "opacity")}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition ${
+              activePanel === "opacity"
+                ? "bg-coral text-white font-bold shadow-sm shadow-coral/30"
+                : "text-sand-dark hover:text-navy hover:bg-canvas-subtle"
+            }`}
+            title="Radar Overlay Transparency"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setActivePanel(activePanel === "presets" ? null : "presets")}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition ${
+              activePanel === "presets"
+                ? "bg-coral text-white font-bold shadow-sm shadow-coral/30"
+                : "text-sand-dark hover:text-navy hover:bg-canvas-subtle"
+            }`}
+            title="Cal/Val Geographic Presets"
+          >
+            <MapPin className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setActivePanel(activePanel === "legend" ? null : "legend")}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition ${
+              activePanel === "legend"
+                ? "bg-coral text-white font-bold shadow-sm shadow-coral/30"
+                : "text-sand-dark hover:text-navy hover:bg-canvas-subtle"
+            }`}
+            title="Color Legend &amp; Scattering Physics"
+          >
+            <Info className="w-3.5 h-3.5" />
+          </button>
+
+          <div className="h-px bg-ice mx-1" />
+
+          <button
+            onClick={handleResetView}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-sand-dark hover:text-navy hover:bg-canvas-subtle transition"
+            title="Recenter Map on Footprint"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-coral" />
+          </button>
         </div>
       </div>
 
-      {/* Legend & Instructions Overlay */}
-      <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
-        <div className="bg-slate-950/85 backdrop-blur-md border border-slate-800 rounded-xl p-3 shadow-2xl max-w-sm pointer-events-auto text-xs text-slate-300 space-y-2">
-          <div className="flex items-center justify-between font-semibold text-white">
-            <span>{radarSeason === "harmonic" ? "Harmonic Color Rhythm" : "Dual-Pol SAR Composite"}</span>
-            <span className="text-[10px] text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800">
-              {radarSeason === "harmonic" ? "HSV Encoded" : "ESA / NASA RGB"}
+      {/* Flyout Panel */}
+      {activePanel && (
+        <div className="absolute top-4 left-16 z-20 w-84 glass-panel rounded-2xl p-4 shadow-2xl space-y-3 pointer-events-auto border border-ice bg-white text-navy animate-in fade-in duration-150">
+          <div className="flex items-center justify-between pb-2 border-b border-ice">
+            <span className="text-[11px] font-mono font-bold text-navy uppercase tracking-wider flex items-center gap-1.5">
+              {activePanel === "layers" && <>RADAR LAYERS // COMPOSITES</>}
+              {activePanel === "basemap" && <>GEOGRAPHIC UNDERLAYS</>}
+              {activePanel === "opacity" && <>OVERLAY TRANSPARENCY</>}
+              {activePanel === "presets" && <>CAL/VAL REFERENCE PRESETS</>}
+              {activePanel === "legend" && <>POLARIMETRIC SCATTERING LEGEND</>}
             </span>
+            <button
+              onClick={() => setActivePanel(null)}
+              className="text-sand-dark hover:text-navy text-[11px] font-mono px-1.5 py-0.5 rounded hover:bg-canvas-subtle"
+            >
+              ESC
+            </button>
           </div>
-          {radarSeason === "harmonic" ? (
-            <div className="grid grid-cols-3 gap-1.5 text-[11px]">
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />
-                <span>Spring Peak</span>
+
+          {activePanel === "layers" && (
+            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              <div className="flex items-center justify-between text-[11px] text-sand-dark pb-1 font-mono">
+                <span>EPOCH SELECTION:</span>
+                <button
+                  onClick={() => setAutoSync(!autoSync)}
+                  className={`text-[9px] px-2 py-0.5 rounded border transition font-mono font-bold ${
+                    autoSync
+                      ? "bg-coral text-white border-coral"
+                      : "bg-canvas-subtle text-sand-dark border-ice"
+                  }`}
+                >
+                  AUTOSYNC: {autoSync ? "ON" : "OFF"}
+                </button>
               </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-400 inline-block" />
-                <span>Summer Peak</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block" />
-                <span>Autumn Peak</span>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-1.5 text-[11px]">
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
-                <span>Red: VV (Roughness)</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
-                <span>Green: VH (Canopy)</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block" />
-                <span>Blue: Ratio (Water)</span>
+
+              <div className="space-y-1.5">
+                {RADAR_EPOCHS.map((ep) => {
+                  const isSelected = radarSeason === ep.id;
+                  return (
+                    <button
+                      key={ep.id}
+                      onClick={() => {
+                        setRadarSeason(ep.id);
+                        setAutoSync(false);
+                      }}
+                      className={`w-full text-left p-2.5 rounded-xl text-xs transition border flex items-center justify-between ${
+                        isSelected
+                          ? "bg-coral/10 border-coral text-coral font-bold"
+                          : "bg-canvas-subtle hover:bg-ice text-navy border-ice"
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold font-mono text-[11px]">{ep.label}</div>
+                        <div className="text-[10px] text-sand-dark mt-0.5 font-normal">{ep.desc}</div>
+                      </div>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-coral shrink-0 ml-2" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
-          <p className="text-[11px] text-slate-400 italic">
-            Click inside the <span className="text-cyan-400 font-semibold">cyan dashed box</span> to hear the sound of the land.
-          </p>
+
+          {activePanel === "basemap" && (
+            <div className="space-y-2">
+              <div className="text-[10px] font-mono uppercase text-sand-dark font-bold">Geographic Base Layer:</div>
+              {(Object.keys(BASEMAPS) as (keyof typeof BASEMAPS)[]).map((key) => {
+                const isSelected = basemapKey === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setBasemapKey(key)}
+                    className={`w-full text-left p-2.5 rounded-xl text-xs transition border flex items-center justify-between ${
+                      isSelected
+                        ? "bg-coral/10 border-coral text-coral font-bold"
+                        : "bg-canvas-subtle hover:bg-ice text-navy border-ice"
+                    }`}
+                  >
+                    <div>
+                      <div className="font-bold font-mono text-[11px]">{BASEMAPS[key].name}</div>
+                      <div className="text-[10px] text-sand-dark font-normal">{BASEMAPS[key].description}</div>
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-coral shrink-0 ml-2" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {activePanel === "opacity" && (
+            <div className="space-y-4 py-2">
+              <div className="flex items-center justify-between text-xs text-navy font-mono font-bold">
+                <span>Overlay Blending:</span>
+                <span className="text-coral">{Math.round(overlayOpacity * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={overlayOpacity}
+                onChange={(e) => setOverlayOpacity(parseFloat(e.target.value))}
+                className="w-full accent-coral cursor-pointer h-1.5 bg-ice rounded-lg appearance-none"
+              />
+              <p className="text-[11px] text-sand-dark leading-relaxed font-normal">
+                Calibrates balance between microwave backscatter overlays and underlying optical terrain features.
+              </p>
+            </div>
+          )}
+
+          {activePanel === "presets" && (
+            <div className="space-y-2">
+              <div className="text-[10px] font-mono uppercase text-sand-dark font-bold">Representative Coordinates:</div>
+              <div className="space-y-1.5">
+                {presets.map((p) => (
+                  <button
+                    key={p.name}
+                    onClick={() => {
+                      onPointSelected(p.lat, p.lon);
+                      setActivePanel(null);
+                    }}
+                    className="w-full text-left p-2.5 rounded-xl text-xs bg-canvas-subtle hover:bg-ice border border-ice text-navy transition flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="font-bold font-mono text-[11px]">{p.name}</div>
+                      <div className="text-[10px] text-sand-dark font-normal">{p.category}</div>
+                    </div>
+                    <span className="text-[9px] font-mono text-sand-dark bg-white px-1.5 py-0.5 rounded border border-ice font-bold">
+                      {p.lat.toFixed(2)}°, {p.lon.toFixed(2)}°
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activePanel === "legend" && (
+            <div className="space-y-3 text-xs">
+              <div className="p-3.5 rounded-xl bg-canvas-subtle border border-ice space-y-2 font-mono">
+                <div className="font-bold text-navy text-[11px] flex items-center justify-between">
+                  <span>{radarSeason === "harmonic" ? "HARMONIC HSV ENCODING" : "DUAL-POL RGB COMPOSITE"}</span>
+                  <span className="text-[9px] text-coral bg-white px-1.5 py-0.5 rounded border border-ice font-bold">
+                    {radarSeason === "harmonic" ? "FOURIER" : "LEVEL-1 GRD"}
+                  </span>
+                </div>
+                {radarSeason === "harmonic" ? (
+                  <div className="space-y-1.5 text-[10px] text-navy/80">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm" />
+                      <span className="font-medium">Phase = 0.25 (Spring Inundation / Emergence)</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-sm" />
+                      <span className="font-medium">Phase = 0.55 (Summer Canopy Peak)</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block shadow-sm" />
+                      <span className="font-medium">Phase = 0.85 (Autumn Harvest/Fallow)</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 text-[10px] text-navy/80">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-sm" />
+                      <span className="font-medium">Red Channel: VV (Surface Roughness)</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm" />
+                      <span className="font-medium">Green Channel: VH (Canopy Volume)</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block shadow-sm" />
+                      <span className="font-medium">Blue Channel: Cross-Pol Ratio</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Floating Coordinate Telemetry Pill (Top Right) */}
+      <div className="absolute top-4 right-4 z-20 pointer-events-auto hidden sm:flex items-center space-x-2 glass-panel rounded-xl px-3 py-1.5 shadow-md text-xs font-mono border border-ice bg-white/95 text-navy">
+        <Radio className="w-3.5 h-3.5 text-coral animate-pulse" />
+        <span className="text-sand-dark font-bold">SENSOR:</span>
+        <span className="text-navy font-bold">SENTINEL-1 C-BAND // NISAR L-BAND</span>
+        {selectedCoords && (
+          <>
+            <div className="h-3.5 w-px bg-ice mx-1" />
+            <span className="text-coral font-bold">
+              {selectedCoords.lat.toFixed(3)}°N, {Math.abs(selectedCoords.lon).toFixed(3)}°{selectedCoords.lon < 0 ? "W" : "E"}
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Bottom Floating Time Player */}
+      <div className="absolute bottom-4 left-4 right-4 lg:left-14 lg:right-96 z-20 pointer-events-auto">
+        <div className="glass-panel rounded-2xl p-3 shadow-2xl border border-ice bg-white/95 text-navy flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
+          <div className="flex items-center space-x-2">
+            {onTogglePlay && (
+              <button
+                onClick={onTogglePlay}
+                className="p-2.5 rounded-xl bg-coral text-white font-bold transition hover:bg-coral-dark shadow-md shadow-coral/25"
+                title={isPlaying ? "Pause Acoustic Playback" : "Play Acoustic Playback"}
+              >
+                {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+              </button>
+            )}
+
+            {onStepDelta && (
+              <>
+                <button
+                  onClick={() => onStepDelta(-1)}
+                  className="p-2 rounded-lg text-sand-dark hover:text-navy hover:bg-canvas-subtle transition"
+                  title="Previous satellite revisit pass"
+                >
+                  <ChevronLeft className="w-4 h-4 text-coral" />
+                </button>
+                <button
+                  onClick={() => onStepDelta(1)}
+                  className="p-2 rounded-lg text-sand-dark hover:text-navy hover:bg-canvas-subtle transition"
+                  title="Next satellite revisit pass"
+                >
+                  <ChevronRight className="w-4 h-4 text-coral" />
+                </button>
+              </>
+            )}
+
+            {onSpeedChange && (
+              <div className="flex items-center space-x-1 bg-canvas-subtle border border-ice p-1 rounded-xl">
+                <button
+                  onClick={() => onSpeedChange(Math.max(0.25, +(speed - 0.25).toFixed(2)))}
+                  disabled={speed <= 0.25}
+                  className="w-5 h-5 flex items-center justify-center rounded bg-white hover:bg-ice text-navy transition disabled:opacity-30 disabled:cursor-not-allowed font-bold"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <div className="px-1.5 text-center min-w-[45px]">
+                  <span className="text-[10px] font-bold text-navy">{speed.toFixed(2)}x</span>
+                </div>
+                <button
+                  onClick={() => onSpeedChange(Math.min(3.0, +(speed + 0.25).toFixed(2)))}
+                  disabled={speed >= 3.0}
+                  className="w-5 h-5 flex items-center justify-center rounded bg-white hover:bg-ice text-navy transition disabled:opacity-30 disabled:cursor-not-allowed font-bold"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-2 text-xs">
+            <span className="text-sand-dark uppercase text-[10px] font-bold">EPOCH:</span>
+            <span className="px-2.5 py-1 rounded-lg bg-canvas-subtle border border-ice text-navy font-bold text-xs shadow-sm">
+              {activeTimelineDate ? activeTimelineDate : "MULTI-TEMPORAL PASS"}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2 text-xs">
+            <button
+              onClick={() => setAutoSync(!autoSync)}
+              className={`px-3 py-1 rounded-lg border text-xs font-mono transition flex items-center gap-1.5 font-bold ${
+                autoSync
+                  ? "bg-coral/10 text-coral border-coral/30"
+                  : "bg-canvas-subtle text-sand-dark border-ice hover:text-navy"
+              }`}
+            >
+              <span>AUTOSYNC // {autoSync ? "ON" : "OFF"}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
