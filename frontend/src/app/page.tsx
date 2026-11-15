@@ -11,6 +11,10 @@ import { PhysicsModal } from "@/components/PhysicsModal";
 export default function Home() {
   const [regions, setRegions] = useState<Region[]>(FALLBACK_REGIONS);
   const [selectedRegion, setSelectedRegion] = useState<Region>(FALLBACK_REGIONS[0]);
+  const selectedRegionRef = React.useRef(selectedRegion);
+  useEffect(() => {
+    selectedRegionRef.current = selectedRegion;
+  }, [selectedRegion]);
   const [selectedCoords, setSelectedCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [pointData, setPointData] = useState<PointQueryResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -24,6 +28,7 @@ export default function Home() {
       if (regs && regs.length > 0) {
         setRegions(regs);
         setSelectedRegion(regs[0]);
+        selectedRegionRef.current = regs[0];
       }
     });
   }, []);
@@ -36,6 +41,7 @@ export default function Home() {
   // When region changes, clear selection or select region center
   const handleSelectRegion = (r: Region) => {
     setSelectedRegion(r);
+    selectedRegionRef.current = r;
     setSelectedCoords(null);
     setPointData(null);
     // Automatically select a characteristic feature in the new region
@@ -45,7 +51,7 @@ export default function Home() {
   };
 
   const handlePointSelected = async (lat: number, lon: number, regId?: string) => {
-    const targetRegion = regId || selectedRegion.id;
+    const targetRegion = regId || selectedRegionRef.current.id;
     setSelectedCoords({ lat, lon });
     setLoading(true);
     try {

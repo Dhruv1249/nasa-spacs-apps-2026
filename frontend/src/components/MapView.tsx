@@ -74,6 +74,11 @@ export const MapView: React.FC<MapViewProps> = ({
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75);
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
 
+  const onPointSelectedRef = useRef(onPointSelected);
+  useEffect(() => {
+    onPointSelectedRef.current = onPointSelected;
+  }, [onPointSelected]);
+
   // Auto-update radar season when timeline playhead advances if autoSync is active
   useEffect(() => {
     if (autoSync && timelineSeason && timelineSeason !== radarSeason) {
@@ -110,7 +115,9 @@ export const MapView: React.FC<MapViewProps> = ({
 
         // Click handler to sonify
         map.on("click", (e: any) => {
-          onPointSelected(e.latlng.lat, e.latlng.lng);
+          if (onPointSelectedRef.current) {
+            onPointSelectedRef.current(e.latlng.lat, e.latlng.lng);
+          }
         });
 
         mapInstanceRef.current = map;

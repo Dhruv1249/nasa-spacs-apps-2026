@@ -29,7 +29,7 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading, o
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [activeStep, setActiveStep] = useState<number>(0);
   const [volume, setVolume] = useState<number>(0.85);
-  const [speed, setSpeed] = useState<number>(1.0);
+  const [speed, setSpeed] = useState<number>(0.5);
 
   const sonifierRef = useRef<RadarSonifier | null>(null);
 
@@ -43,6 +43,7 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading, o
   // Initialize sonifier instance
   useEffect(() => {
     const sonifier = new RadarSonifier();
+    sonifier.setSpeed(0.5);
     sonifier.setOnStepCallback((step) => {
       setActiveStep(step);
     });
@@ -56,8 +57,9 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading, o
   // Update sonifier when point query data or mode changes
   useEffect(() => {
     if (data && !data.is_out_of_bounds && sonifierRef.current && activeNotes.length > 0) {
-      // Slower, more deliberate default cadence
-      sonifierRef.current.setBaseNoteDuration(isDecadal ? 0.18 : 0.32);
+      // Much slower, deliberate default tempo for clear auditory analysis
+      sonifierRef.current.setSpeed(speed);
+      sonifierRef.current.setBaseNoteDuration(isDecadal ? 0.35 : 0.65);
       sonifierRef.current.setNoteEvents(activeNotes);
       setActiveStep(0);
       if (isPlaying) {
