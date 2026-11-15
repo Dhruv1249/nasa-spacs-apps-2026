@@ -84,10 +84,19 @@ def extract_time_series(region_id: str, project_id: str = None, sample_years: in
     start_year = 2017
     end_year = 2026 if not sample_years else min(2026, start_year + sample_years)
     
-    # Generate bi-weekly date windows
+    # Generate bi-weekly date windows from Nov 2016 up to Nov 2026
     intervals = []
+    if not sample_years:
+        intervals.append(("2016-11-15", "2016-11-30", "2016-11-22"))
+        intervals.append(("2016-12-01", "2016-12-15", "2016-12-07"))
+        intervals.append(("2016-12-16", "2016-12-31", "2016-12-23"))
+        
+    start_year = 2017
+    end_year = 2027 if not sample_years else min(2027, start_year + sample_years)
+    
     for y in range(start_year, end_year):
-        for m in range(1, 13):
+        max_m = 11 if y == 2026 else 12
+        for m in range(1, max_m + 1):
             intervals.append((f"{y}-{m:02d}-01", f"{y}-{m:02d}-15", f"{y}-{m:02d}-07"))
             last_day = 28 if m == 2 else (30 if m in [4, 6, 9, 11] else 31)
             intervals.append((f"{y}-{m:02d}-16", f"{y}-{m:02d}-{last_day}", f"{y}-{m:02d}-23"))
