@@ -13,6 +13,7 @@ import {
   Activity,
   Layers,
   Sparkles,
+  MapPin,
 } from "lucide-react";
 
 interface AudioInspectorProps {
@@ -51,23 +52,25 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading })
 
   // Update sonifier when point query data or mode changes
   useEffect(() => {
-    if (data && sonifierRef.current && activeNotes.length > 0) {
+    if (data && !data.is_out_of_bounds && sonifierRef.current && activeNotes.length > 0) {
       sonifierRef.current.setBaseNoteDuration(isDecadal ? 0.08 : 0.15);
       sonifierRef.current.setNoteEvents(activeNotes);
       setActiveStep(0);
-      setIsPlaying(true);
-      sonifierRef.current.play();
+      if (isPlaying) {
+        sonifierRef.current.play();
+      }
     }
   }, [data, timelineMode]);
 
-  // Handle play/pause
-  const togglePlay = () => {
-    if (!sonifierRef.current || !data) return;
+  // Handle play/pause on user click (guarantees AudioContext is running)
+  const togglePlay = async () => {
+    if (!sonifierRef.current || !data || data.is_out_of_bounds) return;
     if (isPlaying) {
       sonifierRef.current.pause();
       setIsPlaying(false);
     } else {
-      sonifierRef.current.play();
+      await sonifierRef.current.ensureAudioRunning();
+      await sonifierRef.current.play();
       setIsPlaying(true);
     }
   };
@@ -112,7 +115,30 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading })
     );
   }
 
+  if (data.is_out_of_bounds) {
+    return (
+      <aside className="w-full lg:w-96 bg-slate-950 border-l border-slate-800 p-6 flex flex-col items-center justify-center text-center space-y-4">
+        <div className="p-4 bg-amber-950/40 border border-amber-800/60 rounded-2xl text-amber-400">
+          <MapPin className="w-8 h-8 animate-bounce" />
+        </div>
+        <h3 className="text-base font-semibold text-white">Outside SAR Coverage Footprint</h3>
+        <div className="bg-amber-950/30 p-3.5 rounded-xl border border-amber-800/40 text-left space-y-2">
+          <p className="text-xs text-amber-200/90 leading-relaxed font-medium">
+            {data.message}
+          </p>
+          <div className="text-[11px] text-slate-400 font-mono">
+            Footprint bounds: [{data.bounds?.join(", ")}]
+          </div>
+        </div>
+        <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+          Please click inside the <span className="text-cyan-400 font-semibold">cyan dashed radar box</span> on the map or select an acoustic preset.
+        </p>
+      </aside>
+    );
+  }
+
   const { classification, harmonic, coordinates } = data;
+  if (!classification || !harmonic) return null;
   const currentNote = activeNotes[activeStep] || activeNotes[0] || {
     date: "2024-01-01",
     doy: 1,

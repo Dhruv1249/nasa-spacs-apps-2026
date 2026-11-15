@@ -39,8 +39,9 @@ export async function fetchRegions(): Promise<Region[]> {
   }
 }
 
-export function getHeartbeatImageUrl(regionId: string): string {
-  return `${API_BASE_URL}/api/heartbeat/${regionId}/image.png`;
+export function getHeartbeatImageUrl(regionId: string, frame?: string): string {
+  const query = frame ? `?frame=${frame}&v=3` : `?v=3`;
+  return `${API_BASE_URL}/api/heartbeat/${regionId}/image.png${query}`;
 }
 
 export async function queryPoint(regionId: string, lat: number, lon: number): Promise<PointQueryResponse> {

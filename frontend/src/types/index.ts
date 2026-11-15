@@ -48,21 +48,24 @@ export interface TimeSeriesEntry {
 
 export interface PointQueryResponse {
   region: string;
+  is_out_of_bounds?: boolean;
+  message?: string;
+  bounds?: [number, number, number, number];
   coordinates: {
     lat: number;
     lon: number;
     queried_lat: number;
     queried_lon: number;
   };
-  harmonic: HarmonicParams;
-  classification: LandClassification;
-  sonification: {
+  harmonic?: HarmonicParams;
+  classification?: LandClassification;
+  sonification?: {
     base_frequency_hz: number;
     tempo_bpm: number;
     duration_seconds: number;
     note_events: NoteEvent[];
   };
-  time_series: TimeSeriesEntry[];
+  time_series?: TimeSeriesEntry[];
   decadal_time_series?: TimeSeriesEntry[];
   decadal_sonification?: {
     site_name: string;

@@ -59,9 +59,11 @@ export const MapView: React.FC<MapViewProps> = ({
   const mapInstanceRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const overlayRef = useRef<any>(null);
+  const borderRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
 
   const [basemapKey, setBasemapKey] = useState<keyof typeof BASEMAPS>("hybrid");
+  const [radarSeason, setRadarSeason] = useState<"harmonic" | "spring" | "summer" | "autumn" | "drought">("harmonic");
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75);
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
 
@@ -126,7 +128,7 @@ export const MapView: React.FC<MapViewProps> = ({
     });
   }, [basemapKey, mapLoaded]);
 
-  // Update center, bounds and Heartbeat Image Overlay on region change
+  // Update center, bounds, Heartbeat Overlay, and Footprint Border
   useEffect(() => {
     if (!mapLoaded || !mapInstanceRef.current) return;
 
@@ -134,27 +136,40 @@ export const MapView: React.FC<MapViewProps> = ({
       const map = mapInstanceRef.current;
       map.flyTo([region.center[1], region.center[0]], region.zoom, { duration: 1.5 });
 
-      // Remove existing overlay
+      // Remove existing overlay and footprint border
       if (overlayRef.current) {
         map.removeLayer(overlayRef.current);
       }
+      if (borderRef.current) {
+        map.removeLayer(borderRef.current);
+      }
 
-      // Add regional Heartbeat Overlay
-      // bounds: [min_lon, min_lat, max_lon, max_lat] -> [[min_lat, min_lon], [max_lat, max_lon]]
+      // Add regional Heartbeat Overlay & Footprint Box
       const [min_lon, min_lat, max_lon, max_lat] = region.bounds;
       const bounds: [[number, number], [number, number]] = [
         [min_lat, min_lon],
         [max_lat, max_lon],
       ];
 
-      const overlay = L.imageOverlay(getHeartbeatImageUrl(region.id), bounds, {
+      // Outline the satellite radar coverage area
+      const border = L.rectangle(bounds, {
+        color: "#06b6d4",
+        weight: 1.8,
+        dashArray: "6, 6",
+        fill: false,
+        interactive: false,
+      }).addTo(map);
+      borderRef.current = border;
+
+      const frameParam = radarSeason === "harmonic" ? undefined : radarSeason;
+      const overlay = L.imageOverlay(getHeartbeatImageUrl(region.id, frameParam), bounds, {
         opacity: overlayOpacity,
         interactive: false,
       }).addTo(map);
 
       overlayRef.current = overlay;
     });
-  }, [region, mapLoaded]);
+  }, [region, mapLoaded, radarSeason]);
 
   // Update overlay opacity dynamically
   useEffect(() => {
@@ -225,6 +240,39 @@ export const MapView: React.FC<MapViewProps> = ({
           ))}
         </div>
 
+        {/* Dynamic Heartbeat Season & Decadal Anomaly Switcher */}
+        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-2 shadow-xl space-y-1.5">
+          <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+            <span className="flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Dynamic Heartbeat
+            </span>
+            <span className="text-[10px] text-cyan-400 font-mono">
+              {radarSeason === "harmonic" ? "Annual Clock" : radarSeason.toUpperCase()}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {[
+              { id: "harmonic", label: "Harmonic" },
+              { id: "spring", label: "🌱 Spring" },
+              { id: "summer", label: "🌿 Summer" },
+              { id: "autumn", label: "🌾 Autumn" },
+              { id: "drought", label: "☀️ Drought" },
+            ].map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setRadarSeason(s.id as any)}
+                className={`px-2 py-1 text-[11px] font-medium rounded transition ${
+                  radarSeason === s.id
+                    ? "bg-cyan-500 text-slate-950 font-bold shadow"
+                    : "bg-slate-800/70 hover:bg-slate-700 text-slate-300"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Layer Opacity Controller */}
         <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-3 shadow-xl flex items-center space-x-3 text-xs">
           <Sliders className="w-4 h-4 text-cyan-400" />
@@ -266,27 +314,44 @@ export const MapView: React.FC<MapViewProps> = ({
       <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
         <div className="bg-slate-950/85 backdrop-blur-md border border-slate-800 rounded-xl p-3 shadow-2xl max-w-sm pointer-events-auto text-xs text-slate-300 space-y-2">
           <div className="flex items-center justify-between font-semibold text-white">
-            <span>Harmonic Color Rhythm</span>
+            <span>{radarSeason === "harmonic" ? "Harmonic Color Rhythm" : "Dual-Pol SAR Composite"}</span>
             <span className="text-[10px] text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800">
-              HSV Encoded
+              {radarSeason === "harmonic" ? "HSV Encoded" : "ESA / NASA RGB"}
             </span>
           </div>
-          <div className="grid grid-cols-3 gap-1.5 text-[11px]">
-            <div className="flex items-center space-x-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />
-              <span>Spring Peak</span>
+          {radarSeason === "harmonic" ? (
+            <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />
+                <span>Spring Peak</span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-400 inline-block" />
+                <span>Summer Peak</span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block" />
+                <span>Autumn Peak</span>
+              </div>
             </div>
-            <div className="flex items-center space-x-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-400 inline-block" />
-              <span>Summer Peak</span>
+          ) : (
+            <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+                <span>Red: VV (Roughness)</span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                <span>Green: VH (Canopy)</span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block" />
+                <span>Blue: Ratio (Water)</span>
+              </div>
             </div>
-            <div className="flex items-center space-x-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block" />
-              <span>Autumn Peak</span>
-            </div>
-          </div>
+          )}
           <p className="text-[11px] text-slate-400 italic">
-            Click anywhere on the map to sample the backscatter time series and hear the land's acoustic song.
+            Click inside the <span className="text-cyan-400 font-semibold">cyan dashed box</span> to hear the sound of the land.
           </p>
         </div>
       </div>

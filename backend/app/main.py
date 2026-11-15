@@ -53,18 +53,18 @@ def get_regions():
     }
 
 @app.get("/api/heartbeat/{region}/image.png")
-def get_heartbeat_image(region: str):
+def get_heartbeat_image(region: str, frame: Optional[str] = Query(None)):
     if region not in REGIONS:
         raise HTTPException(status_code=404, detail=f"Region '{region}' not found")
         
-    png_bytes = data_loader.get_heartbeat_image(region)
+    png_bytes = data_loader.get_heartbeat_image(region, frame=frame)
     if not png_bytes:
         raise HTTPException(status_code=404, detail="Heartbeat image not found for region")
         
     return Response(
         content=png_bytes,
         media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400"}
+        headers={"Cache-Control": "no-cache, must-revalidate"}
     )
 
 @app.get("/api/point")

@@ -204,6 +204,36 @@ def generate_region_dataset(
     save_png(rgb_image, png_path)
     print(f"Saved: {png_path} ({os.path.getsize(png_path) / 1024:.1f} KB)")
     
+    # Generate Seasonal & Decadal Anomaly Frames
+    def sar_composite(vv, vh):
+        r = np.clip((vv + 22.0) / 16.0, 0.0, 1.0)
+        g = np.clip((vh + 28.0) / 16.0, 0.0, 1.0)
+        ratio = vv - vh
+        b = np.clip((ratio - 2.0) / 10.0, 0.0, 1.0)
+        return (np.stack([r, g, b], axis=-1) * 255).astype(np.uint8)
+
+    # 1. Spring Flooding Frame (DOY ~ 115, index 7)
+    spring_rgb = sar_composite(copol_stack[7], crosspol_stack[7])
+    save_png(spring_rgb, os.path.join(target_dir, "heartbeat_spring_flood.png"))
+    
+    # 2. Summer Peak Canopy Frame (DOY ~ 220, index 15)
+    summer_rgb = sar_composite(copol_stack[15], crosspol_stack[15])
+    save_png(summer_rgb, os.path.join(target_dir, "heartbeat_summer_peak.png"))
+    
+    # 3. Autumn Harvest Stubble Frame (DOY ~ 285, index 19)
+    autumn_rgb = sar_composite(copol_stack[19], crosspol_stack[19])
+    save_png(autumn_rgb, os.path.join(target_dir, "heartbeat_autumn_harvest.png"))
+    
+    # 4. 2021 Megadrought Anomaly Frame (unplanted fallow paddies)
+    drought_copol = np.copy(copol_stack[15])
+    drought_crosspol = np.copy(crosspol_stack[15])
+    drought_mask = (parcel_id < 8) & (~river_mask)
+    drought_copol[drought_mask] -= 6.5
+    drought_crosspol[drought_mask] -= 8.0
+    drought_rgb = sar_composite(drought_copol, drought_crosspol)
+    save_png(drought_rgb, os.path.join(target_dir, "heartbeat_drought.png"))
+    print("Saved seasonal & climate anomaly frames (Spring Flood, Summer Peak, Autumn Harvest, 2021 Drought).")
+    
     # Save NPZ Stack
     npz_path = os.path.join(target_dir, "sar_stack.npz")
     np.savez_compressed(

@@ -47,10 +47,30 @@ class SARDataLoader:
                 with open(decadal_path) as f:
                     self.cache[region_id]["decadal_data"] = json.load(f)
 
-    def get_heartbeat_image(self, region_id: str) -> Optional[bytes]:
+    def get_heartbeat_image(self, region_id: str, frame: Optional[str] = None) -> Optional[bytes]:
+        region_dir = os.path.join(self.data_root, region_id)
+        if frame:
+            frame_map = {
+                "spring": "heartbeat_spring_flood.png",
+                "summer": "heartbeat_summer_peak.png",
+                "autumn": "heartbeat_autumn_harvest.png",
+                "drought": "heartbeat_drought.png",
+            }
+            fname = frame_map.get(frame)
+            if fname:
+                fpath = os.path.join(region_dir, fname)
+                if os.path.exists(fpath):
+                    with open(fpath, "rb") as f:
+                        return f.read()
+
         region_data = self.cache.get(region_id)
         if region_data and "heartbeat_png_bytes" in region_data:
             return region_data["heartbeat_png_bytes"]
+        
+        default_path = os.path.join(region_dir, "heartbeat.png")
+        if os.path.exists(default_path):
+            with open(default_path, "rb") as f:
+                return f.read()
         return None
 
     def query_point(self, region_id: str, lat: float, lon: float) -> Optional[Dict[str, Any]]:
@@ -62,11 +82,21 @@ class SARDataLoader:
         
         min_lon, min_lat, max_lon, max_lat = region_cfg.bounds
         
-        # Clamp coordinates to bounds
+        # Check if coordinates are within the SAR coverage footprint
         if not (min_lat <= lat <= max_lat and min_lon <= lon <= max_lon):
-            # Clamp to nearest valid edge coordinate
-            lat = max(min_lat, min(max_lat, lat))
-            lon = max(min_lon, min(max_lon, lon))
+            lon_label = f"{abs(lon):.3f}°W" if lon < 0 else f"{lon:.3f}°E"
+            return {
+                "region": region_id,
+                "is_out_of_bounds": True,
+                "coordinates": {
+                    "lat": lat,
+                    "lon": lon,
+                    "queried_lat": lat,
+                    "queried_lon": lon
+                },
+                "bounds": list(region_cfg.bounds),
+                "message": f"Clicked coordinate ({lat:.3f}°N, {lon_label}) is outside the Sentinel-1 study area for {region_cfg.name}. Click inside the cyan radar box or select an acoustic preset above."
+            }
             
         lats = data["lats"]
         lons = data["lons"]
