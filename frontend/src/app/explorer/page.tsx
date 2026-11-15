@@ -38,6 +38,7 @@ function ExplorerContent() {
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(0.5);
   const [activeStep, setActiveStep] = useState<number>(0);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState<boolean>(false);
+  const [recenterTrigger, setRecenterTrigger] = useState<number>(0);
 
   // Load regions from API or fallback
   useEffect(() => {
@@ -97,6 +98,14 @@ function ExplorerContent() {
     handlePointSelected(defaultLat, defaultLon, selectedRegion.id);
   }, []);
 
+  const handleRecenter = () => {
+    setRecenterTrigger((prev) => prev + 1);
+    const regId = selectedRegionRef.current.id;
+    const defaultLat = regId === "sacramento" ? 38.835 : 30.910;
+    const defaultLon = regId === "sacramento" ? -121.725 : 75.830;
+    handlePointSelected(defaultLat, defaultLon, regId);
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-canvas text-navy">
       {/* Sleek Frosted Glass Top Navigation */}
@@ -122,6 +131,7 @@ function ExplorerContent() {
             speed={playbackSpeed}
             onSpeedChange={(s) => setPlaybackSpeed(s)}
             onStepDelta={(delta) => setActiveStep((prev) => Math.max(0, prev + delta))}
+            recenterTrigger={recenterTrigger}
           />
         </section>
 
@@ -139,6 +149,7 @@ function ExplorerContent() {
             onToggleCollapse={() => setIsInspectorCollapsed(!isInspectorCollapsed)}
             activeStep={activeStep}
             onStepChange={setActiveStep}
+            onRecenter={handleRecenter}
           />
         </section>
       </main>

@@ -35,6 +35,7 @@ interface MapViewProps {
   speed?: number;
   onSpeedChange?: (newSpeed: number) => void;
   onStepDelta?: (delta: number) => void;
+  recenterTrigger?: number;
 }
 
 const BASEMAPS = {
@@ -101,6 +102,7 @@ export const MapView: React.FC<MapViewProps> = ({
   speed = 0.5,
   onSpeedChange,
   onStepDelta,
+  recenterTrigger,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -245,6 +247,11 @@ export const MapView: React.FC<MapViewProps> = ({
       morphCanvasRef.current.setOpacity(overlayOpacity);
     }
   }, [overlayOpacity]);
+
+  useEffect(() => {
+    if (!recenterTrigger || !mapInstanceRef.current) return;
+    mapInstanceRef.current.flyTo([region.center[1], region.center[0]], region.zoom, { duration: 1.2 });
+  }, [recenterTrigger, region]);
 
   useEffect(() => {
     if (!mapLoaded || !mapInstanceRef.current || !selectedCoords) return;

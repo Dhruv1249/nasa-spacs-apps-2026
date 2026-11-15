@@ -32,6 +32,7 @@ interface AudioInspectorProps {
   onToggleCollapse?: () => void;
   activeStep?: number;
   onStepChange?: (step: number | ((prev: number) => number)) => void;
+  onRecenter?: () => void;
 }
 
 export const AudioInspector: React.FC<AudioInspectorProps> = ({
@@ -46,6 +47,7 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({
   onToggleCollapse,
   activeStep: externalActiveStep,
   onStepChange: externalOnStepChange,
+  onRecenter,
 }) => {
   const [timelineMode, setTimelineMode] = useState<"annual" | "decadal">("annual");
   const [internalIsPlaying, setInternalIsPlaying] = useState<boolean>(false);
@@ -216,8 +218,17 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({
         </div>
         <h3 className="text-xs font-bold text-navy uppercase tracking-wider">Select Landscape Coordinate</h3>
         <p className="text-[11px] text-navy/70 max-w-xs leading-relaxed font-sans">
-          Click inside the coral dashed radar footprint to query dual-polarization backscatter history and synthesize its acoustic signature.
+          Click inside the cyan dashed radar footprint to query dual-polarization backscatter history and synthesize its acoustic signature.
         </p>
+        {onRecenter && (
+          <button
+            onClick={onRecenter}
+            className="flex items-center justify-center space-x-2 py-2 px-4 bg-canvas-subtle hover:bg-ice text-navy border border-ice rounded-xl font-bold text-xs uppercase tracking-wider transition active:scale-[0.98] cursor-pointer shadow-sm"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-coral" />
+            <span>Center on Study Area</span>
+          </button>
+        )}
       </aside>
     );
   }
@@ -245,6 +256,16 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({
             BOUNDS: [{data.bounds?.join(", ")}]
           </div>
         </div>
+
+        {onRecenter && (
+          <button
+            onClick={onRecenter}
+            className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-coral hover:bg-coral/90 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition shadow-md shadow-coral/25 active:scale-[0.98] cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Click to Recenter</span>
+          </button>
+        )}
       </aside>
     );
   }
