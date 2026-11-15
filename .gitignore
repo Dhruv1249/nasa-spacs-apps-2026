@@ -35,6 +35,8 @@ Thumbs.db
 *.npz
 *.SAFE/
 backend/data/raw/
+.gcloud_adc.json
+credentials.json
 backend/data/downloads/
 
 # Logs & Temporary
