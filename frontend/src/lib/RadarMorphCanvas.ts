@@ -88,7 +88,7 @@ export class RadarMorphCanvas {
       }
     `;
 
-    // Dynamic radar pixel morph shader with physical backscatter gradient warping
+    // Smooth energy-conserving radar morph shader (zero spatial distortion or wave ripples)
     const fsSource = `
       precision highp float;
       varying vec2 v_uv;
@@ -100,32 +100,17 @@ export class RadarMorphCanvas {
         vec4 colA = texture2D(u_texA, v_uv);
         vec4 colB = texture2D(u_texB, v_uv);
 
-        // Physical SAR backscatter gradient vector (Red = VV copol, Green = VH crosspol)
-        vec2 diff = colB.rg - colA.rg;
-
-        // Symmetric warp bell curve: peaks at mid-transition (u_progress = 0.5)
-        float warp = sin(u_progress * 3.14159265);
-
-        // Continuous undulating radar wave across the terrain
-        float wave = sin((v_uv.x * 3.5 + v_uv.y * 2.5) * 6.28 - u_progress * 6.28) * warp * 0.015;
-
-        // Dynamic displacement vectors: stretches A forward, pulls B backward
-        vec2 disp = (diff * 0.05 + vec2(wave, -wave * 0.6)) * warp;
-
-        vec2 uvA = clamp(v_uv + disp * (1.0 - u_progress), 0.0, 1.0);
-        vec2 uvB = clamp(v_uv - disp * u_progress, 0.0, 1.0);
-
-        vec4 warpedA = texture2D(u_texA, uvA);
-        vec4 warpedB = texture2D(u_texB, uvB);
-
-        // Smooth cosine blend
+        // Smoothstep S-curve for natural temporal acceleration and deceleration
         float t = smoothstep(0.0, 1.0, u_progress);
-        vec4 blended = mix(warpedA, warpedB, t);
 
-        // Midpoint canopy energy boost to prevent desaturation dip
-        blended.rgb += diff.r * warp * 0.08;
+        // Energy-conserving quadratic radiometric blend (eliminates midpoint dimming and double-exposure ghosting)
+        // In optical remote sensing, sqrt(mix(A^2, B^2, t)) preserves perceived luminous power and backscatter saturation
+        vec3 colA_sq = colA.rgb * colA.rgb;
+        vec3 colB_sq = colB.rgb * colB.rgb;
+        vec3 blended = sqrt(mix(colA_sq, colB_sq, t));
 
-        gl_FragColor = blended;
+        float alpha = mix(colA.a, colB.a, t);
+        gl_FragColor = vec4(blended, alpha);
       }
     `;
 

@@ -187,7 +187,7 @@ export const MapView: React.FC<MapViewProps> = ({
         morphCanvasRef.current = new RadarMorphCanvas(map, L, {
           bounds,
           opacity: overlayOpacity,
-          durationMs: 420,
+          durationMs: 320,
         });
         morphCanvasRef.current.transitionToUrl(initialUrl, 0);
       } else {
@@ -203,7 +203,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
     const frameParam = radarSeason === "harmonic" ? undefined : radarSeason;
     const nextUrl = getHeartbeatImageUrl(region.id, frameParam);
-    morphCanvasRef.current.transitionToUrl(nextUrl, 420);
+    morphCanvasRef.current.transitionToUrl(nextUrl, 320);
   }, [radarSeason, region.id]);
 
   // Update overlay opacity dynamically
