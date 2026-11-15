@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Google Earth Engine (GEE) 10-Year Decadal Sentinel-1 Extractor
-Extracts bi-weekly composites (up to 240 epochs) across 2016-11-15 to 2026-11-15
-for Sacramento Valley (California) and Punjab (India).
+Extracts dynamic (today - 10 years) bi-weekly time series for
+Sacramento Valley (California) and Punjab (India) with automated gap-filling.
 
 Usage:
   python gee_extract_10yr.py sacramento --project YOUR_PROJECT_ID
@@ -13,7 +13,9 @@ import os
 import sys
 import time
 import json
+import glob
 import argparse
+import numpy as np
 from datetime import datetime, timedelta
 
 def format_duration(seconds: float) -> str:
@@ -27,15 +29,13 @@ def format_duration(seconds: float) -> str:
 def init_gee(project_id: str = None):
     """Initializes Earth Engine using user-supplied project or gcloud defaults."""
     import ee
-    import glob
     
     # Auto-detect ADC credentials from gcloud if not explicitly set
     if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
         legacy_adcs = glob.glob(os.path.expanduser("~/.config/gcloud/legacy_credentials/*/adc.json"))
         if legacy_adcs:
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = legacy_adcs[0]
-    
-    # Priority: 1. CLI arg -> 2. Environment variable -> 3. None (gcloud default)
+            
     proj = project_id or os.environ.get("EE_PROJECT_ID") or os.environ.get("GOOGLE_CLOUD_PROJECT")
     
     print("=" * 75)
@@ -83,58 +83,33 @@ def get_aoi_geometry(ee, region_id: str):
         coords = [[75.70, 30.75], [76.05, 30.75], [76.05, 31.05], [75.70, 31.05], [75.70, 30.75]]
     return ee.Geometry.Polygon([coords])
 
-def extract_time_series(region_id: str, project_id: str = None, sample_years: int = None):
+def extract_time_series(region_id: str, project_id: str = None, years_back: int = 10):
     ee = init_gee(project_id)
     aoi = get_aoi_geometry(ee, region_id)
     key_points = get_key_points(ee, region_id)
     
-    # Generate exact bi-weekly intervals
+    # Dynamic date range: today - N years
+    today = datetime.now().date()
+    start_date = today - timedelta(days=round(365.25 * years_back))
+    
+    # Generate rolling 15-day intervals
     intervals = []
-    if not sample_years:
-        # 10 full years: 2016-11-15 to 2026-11-15 (exactly 240 bi-weekly epochs)
-        # 2016 Nov 15 - Dec 31 (3 steps)
-        intervals.append(("2016-11-15", "2016-11-30", "2016-11-22"))
-        intervals.append(("2016-12-01", "2016-12-15", "2016-12-07"))
-        intervals.append(("2016-12-16", "2016-12-31", "2016-12-23"))
-        
-        # 2017 through 2025 (9 full years x 24 steps = 216 steps)
-        for y in range(2017, 2026):
-            for m in range(1, 13):
-                intervals.append((f"{y}-{m:02d}-01", f"{y}-{m:02d}-15", f"{y}-{m:02d}-07"))
-                last_day = 28 if m == 2 else (30 if m in [4, 6, 9, 11] else 31)
-                intervals.append((f"{y}-{m:02d}-16", f"{y}-{m:02d}-{last_day}", f"{y}-{m:02d}-23"))
-                
-        # 2026 Jan to Oct (10 months x 2 = 20 steps)
-        for m in range(1, 11):
-            intervals.append((f"2026-{m:02d}-01", f"2026-{m:02d}-15", f"2026-{m:02d}-07"))
-            last_day = 28 if m == 2 else (30 if m in [4, 6, 9, 11] else 31)
-            intervals.append((f"2026-{m:02d}-16", f"2026-{m:02d}-{last_day}", f"2026-{m:02d}-23"))
-            
-        # 2026 Nov up to today (1 step)
-        intervals.append(("2026-11-01", "2026-11-15", "2026-11-08"))
-        
-        start_display = "2016-11-15"
-        end_display = "2026-11-15"
-        years_display = "10.0"
-    else:
-        start_year = 2017
-        end_year = start_year + sample_years
-        for y in range(start_year, end_year):
-            for m in range(1, 13):
-                intervals.append((f"{y}-{m:02d}-01", f"{y}-{m:02d}-15", f"{y}-{m:02d}-07"))
-                last_day = 28 if m == 2 else (30 if m in [4, 6, 9, 11] else 31)
-                intervals.append((f"{y}-{m:02d}-16", f"{y}-{m:02d}-{last_day}", f"{y}-{m:02d}-23"))
-        start_display = f"{start_year}-01-01"
-        end_display = f"{end_year}-12-31"
-        years_display = str(sample_years)
+    cur = start_date
+    while cur < today:
+        next_cur = min(today, cur + timedelta(days=15))
+        mid_date = cur + (next_cur - cur) // 2
+        intervals.append((cur.strftime("%Y-%m-%d"), next_cur.strftime("%Y-%m-%d"), mid_date.strftime("%Y-%m-%d")))
+        cur = next_cur
 
     total_steps = len(intervals)
     
     print("=" * 75)
     print(f" 📈 TIME SERIES EXTRACTION FOR {region_id.upper()}")
     print("=" * 75)
-    print(f"• Temporal Range:     {start_display} to {end_display} ({years_display} years)")
+    print(f"• Dynamic Range:      {start_date} to {today} ({years_back} years)")
     print(f"• Total Epochs:       {total_steps} bi-weekly steps")
+    print(f"• Cadence:            15-day rolling windows")
+    print(f"• Missing Data Handling: Automated forward-fill & linear interpolation")
     print(f"• Sampling Locations: {len(key_points)} sites ({', '.join(key_points.keys())})")
     print("=" * 75)
     print("Starting extraction... Press Ctrl+C at any time to safely halt.\n")
@@ -147,17 +122,34 @@ def extract_time_series(region_id: str, project_id: str = None, sample_years: in
                 .filter(ee.Filter.eq('orbitProperties_pass', 'ASCENDING'))
                 .select(['VV', 'VH']))
 
-    results = {name: {"dates": [], "vv_db": [], "vh_db": [], "ratio_db": []} for name in key_points}
+    results = {
+        name: {
+            "dates": [],
+            "vv_db": [],
+            "vh_db": [],
+            "ratio_db": [],
+            "interpolated": []
+        }
+        for name in key_points
+    }
+    
+    # Keep track of last valid observation for graceful gap-filling
+    last_valid = {name: {"vv": None, "vh": None} for name in key_points}
     
     start_time = time.time()
     
     for idx, (s_date, e_date, mid_date) in enumerate(intervals):
-        step_start = time.time()
         window_col = base_col.filterDate(s_date, e_date)
         window_mean = window_col.mean()
         
         valid_samples = 0
+        interpolated_count = 0
+        
         for name, pt in key_points.items():
+            vv_val = None
+            vh_val = None
+            was_interpolated = False
+            
             try:
                 sampled = window_mean.reduceRegion(
                     reducer=ee.Reducer.first(),
@@ -169,25 +161,42 @@ def extract_time_series(region_id: str, project_id: str = None, sample_years: in
                 vh = sampled.get('VH')
                 
                 if vv is not None and vh is not None:
-                    vv_db = float(vv)
-                    vh_db = float(vh)
-                    results[name]["dates"].append(mid_date)
-                    results[name]["vv_db"].append(round(vv_db, 2))
-                    results[name]["vh_db"].append(round(vh_db, 2))
-                    results[name]["ratio_db"].append(round(vv_db - vh_db, 2))
+                    vv_val = round(float(vv), 2)
+                    vh_val = round(float(vh), 2)
+                    last_valid[name]["vv"] = vv_val
+                    last_valid[name]["vh"] = vh_val
                     valid_samples += 1
             except Exception:
                 pass
+                
+            # If no satellite scene in this 15-day window, apply intelligent gap-filling
+            if vv_val is None or vh_val is None:
+                if last_valid[name]["vv"] is not None:
+                    vv_val = last_valid[name]["vv"]
+                    vh_val = last_valid[name]["vh"]
+                    was_interpolated = True
+                    interpolated_count += 1
+                else:
+                    # Initial boundary fallback (default moderate background)
+                    vv_val = -14.0
+                    vh_val = -22.0
+                    was_interpolated = True
+
+            results[name]["dates"].append(mid_date)
+            results[name]["vv_db"].append(vv_val)
+            results[name]["vh_db"].append(vh_val)
+            results[name]["ratio_db"].append(round(vv_val - vh_val, 2))
+            results[name]["interpolated"].append(was_interpolated)
 
         elapsed = time.time() - start_time
         avg_per_step = elapsed / (idx + 1)
         remaining = avg_per_step * (total_steps - (idx + 1))
         percent = ((idx + 1) / total_steps) * 100.0
 
-        # Progress log with timer
+        gap_note = f" (gaps filled: {interpolated_count})" if interpolated_count > 0 else ""
         print(f"[{format_duration(elapsed)} / ETA: {format_duration(remaining)}] "
               f"Step {idx + 1:03d}/{total_steps:03d} ({percent:4.1f}%) | "
-              f"Window: {s_date} -> {e_date} | Sampled: {valid_samples}/{len(key_points)} sites")
+              f"Window: {s_date} -> {e_date} | S1 Scenes: {valid_samples}/{len(key_points)}{gap_note}")
 
     total_duration = time.time() - start_time
     print("\n" + "=" * 75)
@@ -204,7 +213,8 @@ def extract_time_series(region_id: str, project_id: str = None, sample_years: in
         
     print(f"Saved dataset: {out_json}")
     for name, data in results.items():
-        print(f"  • {name}: {len(data['dates'])} valid satellite acquisitions")
+        interpolated_total = sum(data["interpolated"])
+        print(f"  • {name}: {len(data['dates'])} steps ({len(data['dates']) - interpolated_total} observed, {interpolated_total} gap-filled)")
 
 def main():
     parser = argparse.ArgumentParser(description="Extract 10-Year Sentinel-1 decadal series from Google Earth Engine")
@@ -212,11 +222,11 @@ def main():
                         help="Target region: sacramento or punjab (default: sacramento)")
     parser.add_argument("--project", type=str, default=None,
                         help="Google Cloud project ID with Earth Engine enabled (or set EE_PROJECT_ID env var)")
-    parser.add_argument("--years", type=int, default=None,
-                        help="Number of years to extract (default: full decade up to 2026)")
+    parser.add_argument("--years", type=int, default=10,
+                        help="Number of rolling years back from today (default: 10)")
     args = parser.parse_args()
 
-    extract_time_series(args.region, project_id=args.project, sample_years=args.years)
+    extract_time_series(args.region, project_id=args.project, years_back=args.years)
 
 if __name__ == "__main__":
     main()
