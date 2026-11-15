@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Region } from "@/types";
 import { getHeartbeatImageUrl } from "@/lib/api";
+import { RadarMorphCanvas } from "@/lib/RadarMorphCanvas";
 import { Layers, MapPin, Sparkles, Sliders, Globe, Eye, RotateCcw } from "lucide-react";
 
 interface MapViewProps {
@@ -62,9 +63,7 @@ export const MapView: React.FC<MapViewProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
-  const overlayARef = useRef<any>(null);
-  const overlayBRef = useRef<any>(null);
-  const activeOverlayKeyRef = useRef<"A" | "B">("A");
+  const morphCanvasRef = useRef<RadarMorphCanvas | null>(null);
   const borderRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
 
@@ -126,6 +125,10 @@ export const MapView: React.FC<MapViewProps> = ({
     });
 
     return () => {
+      if (morphCanvasRef.current) {
+        morphCanvasRef.current.destroy();
+        morphCanvasRef.current = null;
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -157,9 +160,7 @@ export const MapView: React.FC<MapViewProps> = ({
       const map = mapInstanceRef.current;
       map.flyTo([region.center[1], region.center[0]], region.zoom, { duration: 1.5 });
 
-      // Remove existing overlays and footprint border
-      if (overlayARef.current) map.removeLayer(overlayARef.current);
-      if (overlayBRef.current) map.removeLayer(overlayBRef.current);
+      // Remove existing footprint border
       if (borderRef.current) map.removeLayer(borderRef.current);
 
       const [min_lon, min_lat, max_lon, max_lat] = region.bounds;
@@ -178,94 +179,37 @@ export const MapView: React.FC<MapViewProps> = ({
       }).addTo(map);
       borderRef.current = border;
 
-      // Initialize Dual Overlays for 60fps Smooth Morph Transition
+      // Initialize or update GPU Radar Morph Canvas
       const frameParam = radarSeason === "harmonic" ? undefined : radarSeason;
       const initialUrl = getHeartbeatImageUrl(region.id, frameParam);
 
-      const layerA = L.imageOverlay(initialUrl, bounds, {
-        opacity: overlayOpacity,
-        interactive: false,
-      }).addTo(map);
-
-      const layerB = L.imageOverlay(initialUrl, bounds, {
-        opacity: 0,
-        interactive: false,
-      }).addTo(map);
-
-      const applyMorphStyles = (el: HTMLElement | HTMLImageElement | null | undefined) => {
-        if (!el) return;
-        el.style.transition =
-          "opacity 450ms cubic-bezier(0.25, 1, 0.5, 1), filter 450ms cubic-bezier(0.25, 1, 0.5, 1), transform 450ms cubic-bezier(0.25, 1, 0.5, 1)";
-        el.style.willChange = "opacity, filter, transform";
-        el.style.transformOrigin = "center center";
-      };
-
-      const elA = layerA.getElement();
-      const elB = layerB.getElement();
-      applyMorphStyles(elA);
-      applyMorphStyles(elB);
-
-      overlayARef.current = layerA;
-      overlayBRef.current = layerB;
-      activeOverlayKeyRef.current = "A";
+      if (!morphCanvasRef.current) {
+        morphCanvasRef.current = new RadarMorphCanvas(map, L, {
+          bounds,
+          opacity: overlayOpacity,
+          durationMs: 420,
+        });
+        morphCanvasRef.current.transitionToUrl(initialUrl, 0);
+      } else {
+        morphCanvasRef.current.setBounds(bounds);
+        morphCanvasRef.current.transitionToUrl(initialUrl, 0);
+      }
     });
   }, [region, mapLoaded]);
 
-  // Smooth Morph Transition between satellite radar photos
+  // Dynamic GPU Pixel Morph Transition between satellite radar photos
   useEffect(() => {
-    if (!overlayARef.current || !overlayBRef.current) return;
+    if (!morphCanvasRef.current) return;
 
     const frameParam = radarSeason === "harmonic" ? undefined : radarSeason;
     const nextUrl = getHeartbeatImageUrl(region.id, frameParam);
-    const layerA = overlayARef.current;
-    const layerB = overlayBRef.current;
-
-    const elA = layerA.getElement() as HTMLElement | null;
-    const elB = layerB.getElement() as HTMLElement | null;
-
-    if (activeOverlayKeyRef.current === "A") {
-      // Morph A -> B
-      layerB.setUrl(nextUrl);
-      if (elB) {
-        elB.style.transform = "scale(0.992)";
-        elB.style.filter = "contrast(120%) saturate(125%) brightness(105%) blur(1px)";
-        void elB.offsetWidth; // Force GPU layout flush for morph animation
-        elB.style.transform = "scale(1.0)";
-        elB.style.filter = "contrast(100%) saturate(100%) brightness(100%) blur(0px)";
-      }
-      if (elA) {
-        elA.style.transform = "scale(1.018)";
-        elA.style.filter = "contrast(125%) saturate(135%) brightness(108%) blur(1.5px)";
-      }
-      layerB.setOpacity(overlayOpacity);
-      layerA.setOpacity(0);
-      activeOverlayKeyRef.current = "B";
-    } else {
-      // Morph B -> A
-      layerA.setUrl(nextUrl);
-      if (elA) {
-        elA.style.transform = "scale(0.992)";
-        elA.style.filter = "contrast(120%) saturate(125%) brightness(105%) blur(1px)";
-        void elA.offsetWidth;
-        elA.style.transform = "scale(1.0)";
-        elA.style.filter = "contrast(100%) saturate(100%) brightness(100%) blur(0px)";
-      }
-      if (elB) {
-        elB.style.transform = "scale(1.018)";
-        elB.style.filter = "contrast(125%) saturate(135%) brightness(108%) blur(1.5px)";
-      }
-      layerA.setOpacity(overlayOpacity);
-      layerB.setOpacity(0);
-      activeOverlayKeyRef.current = "A";
-    }
+    morphCanvasRef.current.transitionToUrl(nextUrl, 420);
   }, [radarSeason, region.id]);
 
-  // Update overlay opacity dynamically on active layer
+  // Update overlay opacity dynamically
   useEffect(() => {
-    if (activeOverlayKeyRef.current === "A" && overlayARef.current) {
-      overlayARef.current.setOpacity(overlayOpacity);
-    } else if (activeOverlayKeyRef.current === "B" && overlayBRef.current) {
-      overlayBRef.current.setOpacity(overlayOpacity);
+    if (morphCanvasRef.current) {
+      morphCanvasRef.current.setOpacity(overlayOpacity);
     }
   }, [overlayOpacity]);
 
