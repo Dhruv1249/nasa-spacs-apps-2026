@@ -1,6 +1,7 @@
 import { Region, PointQueryResponse } from "@/types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE_URL = rawApiUrl.replace(/\/+$/, "");
 
 export const FALLBACK_REGIONS: Region[] = [
   {
