@@ -178,7 +178,7 @@ export const MapView: React.FC<MapViewProps> = ({
       }).addTo(map);
       borderRef.current = border;
 
-      // Initialize Dual Overlays for 60fps Smooth Cross-Fade Interpolation
+      // Initialize Dual Overlays for 60fps Smooth Morph Transition
       const frameParam = radarSeason === "harmonic" ? undefined : radarSeason;
       const initialUrl = getHeartbeatImageUrl(region.id, frameParam);
 
@@ -192,10 +192,18 @@ export const MapView: React.FC<MapViewProps> = ({
         interactive: false,
       }).addTo(map);
 
+      const applyMorphStyles = (el: HTMLElement | HTMLImageElement | null | undefined) => {
+        if (!el) return;
+        el.style.transition =
+          "opacity 450ms cubic-bezier(0.25, 1, 0.5, 1), filter 450ms cubic-bezier(0.25, 1, 0.5, 1), transform 450ms cubic-bezier(0.25, 1, 0.5, 1)";
+        el.style.willChange = "opacity, filter, transform";
+        el.style.transformOrigin = "center center";
+      };
+
       const elA = layerA.getElement();
       const elB = layerB.getElement();
-      if (elA) elA.style.transition = "opacity 350ms ease-in-out";
-      if (elB) elB.style.transition = "opacity 350ms ease-in-out";
+      applyMorphStyles(elA);
+      applyMorphStyles(elB);
 
       overlayARef.current = layerA;
       overlayBRef.current = layerB;
@@ -203,7 +211,7 @@ export const MapView: React.FC<MapViewProps> = ({
     });
   }, [region, mapLoaded]);
 
-  // Smooth Cross-Fade Interpolation between radar photos
+  // Smooth Morph Transition between satellite radar photos
   useEffect(() => {
     if (!overlayARef.current || !overlayBRef.current) return;
 
@@ -212,20 +220,40 @@ export const MapView: React.FC<MapViewProps> = ({
     const layerA = overlayARef.current;
     const layerB = overlayBRef.current;
 
-    const elA = layerA.getElement();
-    const elB = layerB.getElement();
-    if (elA) elA.style.transition = "opacity 350ms ease-in-out";
-    if (elB) elB.style.transition = "opacity 350ms ease-in-out";
+    const elA = layerA.getElement() as HTMLElement | null;
+    const elB = layerB.getElement() as HTMLElement | null;
 
     if (activeOverlayKeyRef.current === "A") {
-      // Cross-fade A -> B
+      // Morph A -> B
       layerB.setUrl(nextUrl);
+      if (elB) {
+        elB.style.transform = "scale(0.992)";
+        elB.style.filter = "contrast(120%) saturate(125%) brightness(105%) blur(1px)";
+        void elB.offsetWidth; // Force GPU layout flush for morph animation
+        elB.style.transform = "scale(1.0)";
+        elB.style.filter = "contrast(100%) saturate(100%) brightness(100%) blur(0px)";
+      }
+      if (elA) {
+        elA.style.transform = "scale(1.018)";
+        elA.style.filter = "contrast(125%) saturate(135%) brightness(108%) blur(1.5px)";
+      }
       layerB.setOpacity(overlayOpacity);
       layerA.setOpacity(0);
       activeOverlayKeyRef.current = "B";
     } else {
-      // Cross-fade B -> A
+      // Morph B -> A
       layerA.setUrl(nextUrl);
+      if (elA) {
+        elA.style.transform = "scale(0.992)";
+        elA.style.filter = "contrast(120%) saturate(125%) brightness(105%) blur(1px)";
+        void elA.offsetWidth;
+        elA.style.transform = "scale(1.0)";
+        elA.style.filter = "contrast(100%) saturate(100%) brightness(100%) blur(0px)";
+      }
+      if (elB) {
+        elB.style.transform = "scale(1.018)";
+        elB.style.filter = "contrast(125%) saturate(135%) brightness(108%) blur(1.5px)";
+      }
       layerA.setOpacity(overlayOpacity);
       layerB.setOpacity(0);
       activeOverlayKeyRef.current = "A";
@@ -306,8 +334,11 @@ export const MapView: React.FC<MapViewProps> = ({
         {/* Dynamic Heartbeat Season & Decadal Anomaly Switcher */}
         <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-2 shadow-xl space-y-1.5">
           <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Dynamic Heartbeat
+              <span className="text-[9px] text-cyan-400 font-mono bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800/80 shadow-sm">
+                🌊 Morph
+              </span>
             </span>
             <div className="flex items-center gap-1.5">
               {activeTimelineDate && (

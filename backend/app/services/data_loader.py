@@ -126,7 +126,30 @@ class SARDataLoader:
         doys = data["doys"]
         
         # Compute harmonic regression for this pixel
-        harmonic = fit_first_order_harmonic(np.array(doys), np.array(copol_series))
+        if region_id == "punjab":
+            from app.services.sar_processor import fit_second_order_harmonic
+            h2 = fit_second_order_harmonic(np.array(doys), np.array(copol_series))
+            max_amp = max(h2["amp1"], h2["amp2"])
+            harmonic = {
+                "a0": h2["a0"],
+                "a1": h2.get("amp1", 0.0),
+                "b1": 0.0,
+                "amplitude": max_amp,
+                "phase_rad": (h2["phase1_doy"] / 365.25) * 2.0 * np.pi,
+                "phase_doy": h2["phase1_doy"],
+                "r_squared": h2["r_squared"]
+            }
+            omega = 2.0 * np.pi / 365.25
+            c1_arr = np.cos(omega * np.array(doys))
+            c2_arr = np.cos(2.0 * omega * np.array(doys))
+            fitted_curve = h2["a0"] + h2["amp1"] * c1_arr + h2["amp2"] * c2_arr
+        else:
+            harmonic = fit_first_order_harmonic(np.array(doys), np.array(copol_series))
+            omega = 2.0 * np.pi / 365.0
+            fitted_curve = [
+                harmonic["a0"] + harmonic["a1"] * np.cos(omega * d) + harmonic["b1"] * np.sin(omega * d)
+                for d in doys
+            ]
         
         # Generate sonification profile & acoustic archetype
         sonification = calculate_sonification_profile(
@@ -139,16 +162,14 @@ class SARDataLoader:
         
         # Construct response time-series
         time_series = []
-        omega = 2.0 * np.pi / 365.0
-        for d, doy, cp, xp in zip(dates, doys, copol_series, crosspol_series):
-            fitted_val = harmonic["a0"] + harmonic["a1"] * np.cos(omega * doy) + harmonic["b1"] * np.sin(omega * doy)
+        for i, (d, doy, cp, xp) in enumerate(zip(dates, doys, copol_series, crosspol_series)):
             time_series.append({
                 "date": str(d),
                 "doy": int(doy),
                 "copol_dB": round(float(cp), 2),
                 "crosspol_dB": round(float(xp), 2),
                 "ratio_dB": round(float(cp - xp), 2),
-                "fitted_dB": round(float(fitted_val), 2)
+                "fitted_dB": round(float(fitted_curve[i]), 2)
             })
             
         # Check for 10-Year Decadal data
