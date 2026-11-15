@@ -8,6 +8,7 @@ import { Navbar } from "@/components/Navbar";
 import { MapView } from "@/components/MapView";
 import { AudioInspector } from "@/components/AudioInspector";
 import { PhysicsModal } from "@/components/PhysicsModal";
+import { ExplorerTour } from "@/components/ExplorerTour";
 import { Activity } from "lucide-react";
 
 function ExplorerContent() {
@@ -39,6 +40,20 @@ function ExplorerContent() {
   const [activeStep, setActiveStep] = useState<number>(0);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState<boolean>(false);
   const [recenterTrigger, setRecenterTrigger] = useState<number>(0);
+  const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
+
+  // Check first visit for interactive tour
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hasSeenTour = localStorage.getItem("land_heartbeat_tour_seen");
+      if (!hasSeenTour) {
+        const timer = setTimeout(() => {
+          setIsTourOpen(true);
+        }, 750);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, []);
 
   // Load regions from API or fallback
   useEffect(() => {
@@ -114,6 +129,7 @@ function ExplorerContent() {
         selectedRegion={selectedRegion}
         onSelectRegion={handleSelectRegion}
         onOpenHelp={() => setIsHelpOpen(true)}
+        onOpenTour={() => setIsTourOpen(true)}
       />
 
       {/* EOS LandViewer + Windy Layout Workstation */}
@@ -156,6 +172,9 @@ function ExplorerContent() {
 
       {/* SAR Physics & Sonification Explainer Modal */}
       <PhysicsModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+
+      {/* Interactive First-Visit Feature Tour */}
+      <ExplorerTour isOpen={isTourOpen} onClose={() => setIsTourOpen(false)} />
     </div>
   );
 }

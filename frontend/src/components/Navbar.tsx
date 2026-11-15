@@ -11,7 +11,8 @@ import {
   HelpCircle,
   Menu,
   X,
-  ArrowRight
+  ArrowRight,
+  Compass
 } from "lucide-react";
 
 interface NavbarProps {
@@ -19,6 +20,7 @@ interface NavbarProps {
   selectedRegion?: Region;
   onSelectRegion?: (r: Region) => void;
   onOpenHelp?: () => void;
+  onOpenTour?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -26,6 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   selectedRegion = FALLBACK_REGIONS[0],
   onSelectRegion,
   onOpenHelp,
+  onOpenTour,
 }) => {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -46,8 +49,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Left: EnduroSat-Style Minimal Aerospace Wordmark */}
       <div className="flex items-center space-x-3">
         <Link href="/" className="flex items-center space-x-2.5 group">
-          <div className="relative w-7 h-7 rounded-lg bg-navy/5 border border-navy/15 flex items-center justify-center shadow-xs group-hover:border-coral transition-colors">
-            <Radio className="w-3.5 h-3.5 text-navy group-hover:text-coral transition-colors" />
+          <div className="relative w-7 h-7 rounded-lg bg-navy/5 border border-navy/15 flex items-center justify-center shadow-xs group-hover:border-coral transition-colors p-1 overflow-hidden">
+            <img src="/logo.png" alt="Land Heartbeat Logo" className="w-full h-full object-contain" />
             <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-coral shadow-xs shadow-coral" />
           </div>
 
@@ -131,16 +134,30 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Live Explorer</span>
             <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform text-white" />
           </Link>
-        ) : onOpenHelp ? (
-          <button
-            onClick={onOpenHelp}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-canvas-subtle text-navy text-xs border border-ice transition shadow-xs"
-            title="SAR Physics and Sonification Architecture"
-          >
-            <HelpCircle className="w-3.5 h-3.5 text-coral" />
-            <span>Guide</span>
-          </button>
-        ) : null}
+        ) : (
+          <div className="flex items-center space-x-2">
+            {onOpenTour && (
+              <button
+                onClick={onOpenTour}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-canvas-subtle text-navy text-xs border border-ice transition shadow-xs font-semibold group cursor-pointer"
+                title="Interactive Feature Tour"
+              >
+                <Compass className="w-3.5 h-3.5 text-coral group-hover:rotate-45 transition-transform" />
+                <span>Tour</span>
+              </button>
+            )}
+            {onOpenHelp && (
+              <button
+                onClick={onOpenHelp}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-canvas-subtle text-navy text-xs border border-ice transition shadow-xs cursor-pointer"
+                title="SAR Physics and Sonification Architecture"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-coral" />
+                <span>Guide</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Mobile Hamburger Toggle */}

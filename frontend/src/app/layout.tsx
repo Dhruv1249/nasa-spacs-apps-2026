@@ -4,6 +4,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Land Heartbeat | The Sound of the Land (NASA Space Apps)",
   description: "Translating satellite Synthetic Aperture Radar (SAR) polarimetry and decadal phenological dynamics into multi-sensory visualizations and acoustic sonification.",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
   keywords: [
     "NASA Space Apps 2026",
     "Synthetic Aperture Radar",

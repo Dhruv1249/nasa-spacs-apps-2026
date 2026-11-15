@@ -231,7 +231,8 @@ export default function HomePage() {
           <div className="lg:col-span-7 space-y-8 text-left">
             <ScrollReveal direction="down" delayMs={50}>
               <div className="inline-flex items-center space-x-2.5 px-4 py-1.5 rounded-full bg-white border border-ice text-navy text-xs font-mono shadow-sm">
-                <span className="w-2 h-2 rounded-full bg-coral animate-pulse" />
+                <img src="/logo.png" alt="Land Heartbeat" className="w-4 h-4 object-contain" />
+                <span className="w-1.5 h-1.5 rounded-full bg-coral animate-pulse" />
                 <span className="text-[10px] uppercase tracking-widest text-sand font-bold">
                   <TextScramble text="COPERNICUS SENTINEL-1 // NASA-ISRO NISAR CAL/VAL" speed={20} />
                 </span>
@@ -302,9 +303,9 @@ export default function HomePage() {
                 </div>
 
                 {/* Central Satellite Beacon */}
-                <div className="relative z-10 w-16 h-16 rounded-full bg-white border border-ice flex flex-col items-center justify-center shadow-lg">
-                  <Satellite className="w-5 h-5 text-coral" />
-                  <span className="text-[8px] font-mono font-bold text-navy mt-0.5">NISAR</span>
+                <div className="relative z-10 w-16 h-16 rounded-full bg-white border border-ice flex flex-col items-center justify-center shadow-lg p-2">
+                  <img src="/logo.png" alt="Land Heartbeat" className="w-6 h-6 object-contain" />
+                  <span className="text-[7px] font-mono font-bold text-navy mt-0.5">NISAR</span>
                 </div>
 
                 {/* Target Beacon 1: Sacramento */}
