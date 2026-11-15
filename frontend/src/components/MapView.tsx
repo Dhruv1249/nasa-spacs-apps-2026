@@ -3,12 +3,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Region } from "@/types";
 import { getHeartbeatImageUrl } from "@/lib/api";
-import { Layers, MapPin, Sparkles, Sliders, Globe, Eye } from "lucide-react";
+import { Layers, MapPin, Sparkles, Sliders, Globe, Eye, RotateCcw } from "lucide-react";
 
 interface MapViewProps {
   region: Region;
   onPointSelected: (lat: number, lon: number) => void;
   selectedCoords: { lat: number; lon: number } | null;
+  timelineSeason?: string;
+  activeTimelineDate?: string;
 }
 
 const BASEMAPS = {
@@ -54,6 +56,8 @@ export const MapView: React.FC<MapViewProps> = ({
   region,
   onPointSelected,
   selectedCoords,
+  timelineSeason,
+  activeTimelineDate,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -64,8 +68,16 @@ export const MapView: React.FC<MapViewProps> = ({
 
   const [basemapKey, setBasemapKey] = useState<keyof typeof BASEMAPS>("hybrid");
   const [radarSeason, setRadarSeason] = useState<"harmonic" | "spring" | "summer" | "autumn" | "drought">("harmonic");
+  const [autoSync, setAutoSync] = useState<boolean>(true);
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75);
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
+
+  // Auto-update radar season when timeline playhead advances if autoSync is active
+  useEffect(() => {
+    if (autoSync && timelineSeason && timelineSeason !== radarSeason) {
+      setRadarSeason(timelineSeason as any);
+    }
+  }, [timelineSeason, autoSync]);
 
   // Initialize Leaflet Map
   useEffect(() => {
@@ -246,9 +258,24 @@ export const MapView: React.FC<MapViewProps> = ({
             <span className="flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Dynamic Heartbeat
             </span>
-            <span className="text-[10px] text-cyan-400 font-mono">
-              {radarSeason === "harmonic" ? "Annual Clock" : radarSeason.toUpperCase()}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {activeTimelineDate && autoSync && (
+                <span className="text-[10px] text-rose-400 font-mono font-bold">
+                  {activeTimelineDate}
+                </span>
+              )}
+              <button
+                onClick={() => setAutoSync(!autoSync)}
+                className={`text-[10px] px-1.5 py-0.5 rounded border transition flex items-center gap-1 ${
+                  autoSync
+                    ? "bg-cyan-950/90 text-cyan-400 border-cyan-800 shadow"
+                    : "bg-slate-800 text-slate-400 border-slate-700 hover:text-white"
+                }`}
+                title="Automatically updates map layer with audio playhead"
+              >
+                Auto-Sync {autoSync ? "ON" : "OFF"}
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-1">
             {[
@@ -260,7 +287,10 @@ export const MapView: React.FC<MapViewProps> = ({
             ].map((s) => (
               <button
                 key={s.id}
-                onClick={() => setRadarSeason(s.id as any)}
+                onClick={() => {
+                  setRadarSeason(s.id as any);
+                  setAutoSync(false);
+                }}
                 className={`px-2 py-1 text-[11px] font-medium rounded transition ${
                   radarSeason === s.id
                     ? "bg-cyan-500 text-slate-950 font-bold shadow"

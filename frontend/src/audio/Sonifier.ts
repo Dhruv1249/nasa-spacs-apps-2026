@@ -58,7 +58,15 @@ export class RadarSonifier {
   }
 
   public setSpeed(speed: number) {
-    this.speedMultiplier = Math.max(0.25, Math.min(3, speed));
+    this.speedMultiplier = Math.max(0.2, Math.min(3.5, speed));
+  }
+
+  public seekToStep(index: number) {
+    if (!this.noteEvents || this.noteEvents.length === 0) return;
+    this.currentStep = Math.max(0, Math.min(this.noteEvents.length - 1, index));
+    if (this.onStepCallback) {
+      this.onStepCallback(this.currentStep);
+    }
   }
 
   public async play() {

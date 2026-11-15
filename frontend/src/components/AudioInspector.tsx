@@ -19,13 +19,14 @@ import {
 interface AudioInspectorProps {
   data: PointQueryResponse | null;
   loading: boolean;
+  onActiveEpochChange?: (date: string, doy: number, seasonFrame: string) => void;
 }
 
-export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading }) => {
+export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading, onActiveEpochChange }) => {
   const [timelineMode, setTimelineMode] = useState<"annual" | "decadal">("annual");
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [activeStep, setActiveStep] = useState<number>(0);
-  const [volume, setVolume] = useState<number>(0.8);
+  const [volume, setVolume] = useState<number>(0.85);
   const [speed, setSpeed] = useState<number>(1.0);
 
   const sonifierRef = useRef<RadarSonifier | null>(null);
@@ -53,7 +54,8 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading })
   // Update sonifier when point query data or mode changes
   useEffect(() => {
     if (data && !data.is_out_of_bounds && sonifierRef.current && activeNotes.length > 0) {
-      sonifierRef.current.setBaseNoteDuration(isDecadal ? 0.08 : 0.15);
+      // Slower, more deliberate default cadence
+      sonifierRef.current.setBaseNoteDuration(isDecadal ? 0.18 : 0.32);
       sonifierRef.current.setNoteEvents(activeNotes);
       setActiveStep(0);
       if (isPlaying) {
@@ -61,6 +63,26 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading })
       }
     }
   }, [data, timelineMode]);
+
+  // Synchronize active epoch with parent map overlay
+  useEffect(() => {
+    if (!activeNotes || activeNotes.length === 0 || !onActiveEpochChange) return;
+    const note = activeNotes[activeStep] || activeNotes[0];
+    if (note) {
+      let season = "harmonic";
+      const year = note.date.slice(0, 4);
+      if (year === "2021" && timelineMode === "decadal") {
+        season = "drought";
+      } else if (note.doy >= 95 && note.doy < 145) {
+        season = "spring";
+      } else if (note.doy >= 145 && note.doy < 240) {
+        season = "summer";
+      } else if (note.doy >= 240 && note.doy < 300) {
+        season = "autumn";
+      }
+      onActiveEpochChange(note.date, note.doy, season);
+    }
+  }, [activeStep, activeNotes, timelineMode, onActiveEpochChange]);
 
   // Handle play/pause on user click (guarantees AudioContext is running)
   const togglePlay = async () => {
@@ -241,22 +263,25 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading })
             </button>
           </div>
 
-          {/* Speed & Volume */}
+          {/* Manual Speed Slider & Volume */}
           <div className="flex items-center space-x-3 text-xs">
-            <div className="flex items-center space-x-1 bg-slate-800 px-2 py-1 rounded-md">
-              <FastForward className="w-3.5 h-3.5 text-slate-400" />
-              {[0.5, 1.0, 1.5].map((spd) => (
-                <button
-                  key={spd}
-                  onClick={() => handleSpeedChange(spd)}
-                  className={`px-1.5 py-0.5 rounded ${speed === spd ? "bg-cyan-500 text-slate-950 font-bold" : "text-slate-400 hover:text-white"}`}
-                >
-                  {spd}x
-                </button>
-              ))}
+            <div className="flex items-center space-x-1.5 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/60" title={`Playback Speed: ${speed.toFixed(2)}x`}>
+              <FastForward className="w-3.5 h-3.5 text-cyan-400" />
+              <input
+                type="range"
+                min="0.25"
+                max="2.5"
+                step="0.05"
+                value={speed}
+                onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
+                className="w-16 accent-cyan-400 cursor-pointer"
+              />
+              <span className="text-[11px] font-mono font-bold text-white w-9 text-right">
+                {speed.toFixed(2)}x
+              </span>
             </div>
 
-            <div className="flex items-center space-x-1.5">
+            <div className="flex items-center space-x-1.5 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/60">
               <Volume2 className="w-3.5 h-3.5 text-slate-400" />
               <input
                 type="range"
@@ -265,7 +290,7 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading })
                 step="0.05"
                 value={volume}
                 onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                className="w-16 accent-cyan-400 cursor-pointer"
+                className="w-14 accent-cyan-400 cursor-pointer"
               />
             </div>
           </div>
@@ -294,12 +319,26 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading })
       <div className="p-5 border-b border-slate-800 space-y-3">
         <div className="flex items-center justify-between text-xs font-medium text-slate-300">
           <span>{isDecadal ? "10-Year Multi-Epoch Radar Timeline" : "Backscatter & Harmonic Curve"}</span>
-          <span className="text-[11px] text-slate-500 font-mono">
-            {activeStep + 1}/{activeSeries.length}
+          <span className="text-[11px] text-cyan-400 font-mono">
+            Step {activeStep + 1}/{activeSeries.length} (Click chart to jump)
           </span>
         </div>
 
-        <div className="relative w-full bg-slate-900/80 rounded-xl p-3 border border-slate-800 overflow-hidden">
+        <div
+          className="relative w-full bg-slate-900/80 rounded-xl p-3 border border-slate-800 overflow-hidden cursor-pointer hover:border-cyan-500/50 transition"
+          title="Click anywhere on the chart to jump to that epoch"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const clickX = e.clientX - rect.left - 12;
+            const usableWidth = rect.width - 24;
+            const progress = Math.max(0, Math.min(1, clickX / usableWidth));
+            const targetIndex = Math.round(progress * (activeSeries.length - 1));
+            setActiveStep(targetIndex);
+            if (sonifierRef.current) {
+              sonifierRef.current.seekToStep(targetIndex);
+            }
+          }}
+        >
           <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-28 overflow-visible">
             {/* Grid Lines */}
             <line x1="0" y1={getY(-10)} x2={chartWidth} y2={getY(-10)} stroke="#1f2937" strokeDasharray="3 3" />

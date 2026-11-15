@@ -15,6 +15,8 @@ export default function Home() {
   const [pointData, setPointData] = useState<PointQueryResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
+  const [timelineSeason, setTimelineSeason] = useState<string>("harmonic");
+  const [activeTimelineDate, setActiveTimelineDate] = useState<string>("");
 
   // Load regions from API or fallback
   useEffect(() => {
@@ -25,6 +27,11 @@ export default function Home() {
       }
     });
   }, []);
+
+  const handleActiveEpochChange = (date: string, doy: number, seasonFrame: string) => {
+    setTimelineSeason(seasonFrame);
+    setActiveTimelineDate(date);
+  };
 
   // When region changes, clear selection or select region center
   const handleSelectRegion = (r: Region) => {
@@ -72,12 +79,18 @@ export default function Home() {
             region={selectedRegion}
             onPointSelected={(lat, lon) => handlePointSelected(lat, lon)}
             selectedCoords={selectedCoords}
+            timelineSeason={timelineSeason}
+            activeTimelineDate={activeTimelineDate}
           />
         </section>
 
         {/* Acoustic Sonifier & Time-Series Inspector Sidebar */}
         <section className="w-full lg:w-96 h-1/2 lg:h-full z-10 shadow-2xl">
-          <AudioInspector data={pointData} loading={loading} />
+          <AudioInspector
+            data={pointData}
+            loading={loading}
+            onActiveEpochChange={handleActiveEpochChange}
+          />
         </section>
       </main>
 
