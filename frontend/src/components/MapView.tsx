@@ -62,12 +62,14 @@ export const MapView: React.FC<MapViewProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
-  const overlayRef = useRef<any>(null);
+  const overlayARef = useRef<any>(null);
+  const overlayBRef = useRef<any>(null);
+  const activeOverlayKeyRef = useRef<"A" | "B">("A");
   const borderRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
 
   const [basemapKey, setBasemapKey] = useState<keyof typeof BASEMAPS>("hybrid");
-  const [radarSeason, setRadarSeason] = useState<"harmonic" | "spring" | "summer" | "autumn" | "drought">("harmonic");
+  const [radarSeason, setRadarSeason] = useState<string>("harmonic");
   const [autoSync, setAutoSync] = useState<boolean>(true);
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75);
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
@@ -75,7 +77,7 @@ export const MapView: React.FC<MapViewProps> = ({
   // Auto-update radar season when timeline playhead advances if autoSync is active
   useEffect(() => {
     if (autoSync && timelineSeason && timelineSeason !== radarSeason) {
-      setRadarSeason(timelineSeason as any);
+      setRadarSeason(timelineSeason);
     }
   }, [timelineSeason, autoSync]);
 
@@ -140,7 +142,7 @@ export const MapView: React.FC<MapViewProps> = ({
     });
   }, [basemapKey, mapLoaded]);
 
-  // Update center, bounds, Heartbeat Overlay, and Footprint Border
+  // Initialize Map layers & Footprint Border on Region change
   useEffect(() => {
     if (!mapLoaded || !mapInstanceRef.current) return;
 
@@ -148,15 +150,11 @@ export const MapView: React.FC<MapViewProps> = ({
       const map = mapInstanceRef.current;
       map.flyTo([region.center[1], region.center[0]], region.zoom, { duration: 1.5 });
 
-      // Remove existing overlay and footprint border
-      if (overlayRef.current) {
-        map.removeLayer(overlayRef.current);
-      }
-      if (borderRef.current) {
-        map.removeLayer(borderRef.current);
-      }
+      // Remove existing overlays and footprint border
+      if (overlayARef.current) map.removeLayer(overlayARef.current);
+      if (overlayBRef.current) map.removeLayer(overlayBRef.current);
+      if (borderRef.current) map.removeLayer(borderRef.current);
 
-      // Add regional Heartbeat Overlay & Footprint Box
       const [min_lon, min_lat, max_lon, max_lat] = region.bounds;
       const bounds: [[number, number], [number, number]] = [
         [min_lat, min_lon],
@@ -173,20 +171,66 @@ export const MapView: React.FC<MapViewProps> = ({
       }).addTo(map);
       borderRef.current = border;
 
+      // Initialize Dual Overlays for 60fps Smooth Cross-Fade Interpolation
       const frameParam = radarSeason === "harmonic" ? undefined : radarSeason;
-      const overlay = L.imageOverlay(getHeartbeatImageUrl(region.id, frameParam), bounds, {
+      const initialUrl = getHeartbeatImageUrl(region.id, frameParam);
+
+      const layerA = L.imageOverlay(initialUrl, bounds, {
         opacity: overlayOpacity,
         interactive: false,
       }).addTo(map);
 
-      overlayRef.current = overlay;
-    });
-  }, [region, mapLoaded, radarSeason]);
+      const layerB = L.imageOverlay(initialUrl, bounds, {
+        opacity: 0,
+        interactive: false,
+      }).addTo(map);
 
-  // Update overlay opacity dynamically
+      const elA = layerA.getElement();
+      const elB = layerB.getElement();
+      if (elA) elA.style.transition = "opacity 350ms ease-in-out";
+      if (elB) elB.style.transition = "opacity 350ms ease-in-out";
+
+      overlayARef.current = layerA;
+      overlayBRef.current = layerB;
+      activeOverlayKeyRef.current = "A";
+    });
+  }, [region, mapLoaded]);
+
+  // Smooth Cross-Fade Interpolation between radar photos
   useEffect(() => {
-    if (overlayRef.current) {
-      overlayRef.current.setOpacity(overlayOpacity);
+    if (!overlayARef.current || !overlayBRef.current) return;
+
+    const frameParam = radarSeason === "harmonic" ? undefined : radarSeason;
+    const nextUrl = getHeartbeatImageUrl(region.id, frameParam);
+    const layerA = overlayARef.current;
+    const layerB = overlayBRef.current;
+
+    const elA = layerA.getElement();
+    const elB = layerB.getElement();
+    if (elA) elA.style.transition = "opacity 350ms ease-in-out";
+    if (elB) elB.style.transition = "opacity 350ms ease-in-out";
+
+    if (activeOverlayKeyRef.current === "A") {
+      // Cross-fade A -> B
+      layerB.setUrl(nextUrl);
+      layerB.setOpacity(overlayOpacity);
+      layerA.setOpacity(0);
+      activeOverlayKeyRef.current = "B";
+    } else {
+      // Cross-fade B -> A
+      layerA.setUrl(nextUrl);
+      layerA.setOpacity(overlayOpacity);
+      layerB.setOpacity(0);
+      activeOverlayKeyRef.current = "A";
+    }
+  }, [radarSeason, region.id]);
+
+  // Update overlay opacity dynamically on active layer
+  useEffect(() => {
+    if (activeOverlayKeyRef.current === "A" && overlayARef.current) {
+      overlayARef.current.setOpacity(overlayOpacity);
+    } else if (activeOverlayKeyRef.current === "B" && overlayBRef.current) {
+      overlayBRef.current.setOpacity(overlayOpacity);
     }
   }, [overlayOpacity]);
 
@@ -280,15 +324,16 @@ export const MapView: React.FC<MapViewProps> = ({
           <div className="grid grid-cols-3 gap-1">
             {[
               { id: "harmonic", label: "Harmonic" },
-              { id: "spring", label: "🌱 Spring" },
-              { id: "summer", label: "🌿 Summer" },
-              { id: "autumn", label: "🌾 Autumn" },
-              { id: "drought", label: "☀️ Drought" },
+              { id: "epoch_08", label: "🌱 Spring Flood" },
+              { id: "epoch_14", label: "🌿 Summer Peak" },
+              { id: "epoch_19", label: "🌾 Autumn Harvest" },
+              { id: "climate_2021_drought", label: "☀️ 2021 Drought" },
+              { id: "climate_2017_flood", label: "🌊 2017 Flood" },
             ].map((s) => (
               <button
                 key={s.id}
                 onClick={() => {
-                  setRadarSeason(s.id as any);
+                  setRadarSeason(s.id);
                   setAutoSync(false);
                 }}
                 className={`px-2 py-1 text-[11px] font-medium rounded transition ${

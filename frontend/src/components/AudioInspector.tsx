@@ -14,6 +14,8 @@ import {
   Layers,
   Sparkles,
   MapPin,
+  Plus,
+  Minus,
 } from "lucide-react";
 
 interface AudioInspectorProps {
@@ -64,23 +66,30 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading, o
     }
   }, [data, timelineMode]);
 
-  // Synchronize active epoch with parent map overlay
+  // Synchronize active epoch with parent map overlay (high-density multi-photo timeline)
   useEffect(() => {
     if (!activeNotes || activeNotes.length === 0 || !onActiveEpochChange) return;
     const note = activeNotes[activeStep] || activeNotes[0];
     if (note) {
-      let season = "harmonic";
-      const year = note.date.slice(0, 4);
-      if (year === "2021" && timelineMode === "decadal") {
-        season = "drought";
-      } else if (note.doy >= 95 && note.doy < 145) {
-        season = "spring";
-      } else if (note.doy >= 145 && note.doy < 240) {
-        season = "summer";
-      } else if (note.doy >= 240 && note.doy < 300) {
-        season = "autumn";
+      let frameId = "harmonic";
+      if (timelineMode === "annual") {
+        // Map directly to 24 individual bi-weekly satellite radar photos
+        frameId = `epoch_${String(activeStep % 24).padStart(2, "0")}`;
+      } else {
+        // 10-Year Decadal Mode: map year & phenological phase + climate anomalies
+        const year = note.date.slice(0, 4);
+        const epochInYear = Math.min(23, Math.max(0, Math.floor((note.doy / 365.0) * 24)));
+        frameId = `epoch_${String(epochInYear).padStart(2, "0")}`;
+
+        if (year === "2017" && (note.doy < 150 || note.doy > 320)) {
+          frameId = "climate_2017_flood";
+        } else if (year === "2021") {
+          frameId = "climate_2021_drought";
+        } else if (year === "2023" && note.doy < 160) {
+          frameId = "climate_2023_snow";
+        }
       }
-      onActiveEpochChange(note.date, note.doy, season);
+      onActiveEpochChange(note.date, note.doy, frameId);
     }
   }, [activeStep, activeNotes, timelineMode, onActiveEpochChange]);
 
@@ -263,22 +272,29 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading, o
             </button>
           </div>
 
-          {/* Manual Speed Slider & Volume */}
+          {/* Manual Speed Stepper (+ / - 0.25x) & Volume */}
           <div className="flex items-center space-x-3 text-xs">
-            <div className="flex items-center space-x-1.5 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/60" title={`Playback Speed: ${speed.toFixed(2)}x`}>
-              <FastForward className="w-3.5 h-3.5 text-cyan-400" />
-              <input
-                type="range"
-                min="0.25"
-                max="2.5"
-                step="0.05"
-                value={speed}
-                onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
-                className="w-16 accent-cyan-400 cursor-pointer"
-              />
-              <span className="text-[11px] font-mono font-bold text-white w-9 text-right">
-                {speed.toFixed(2)}x
-              </span>
+            <div className="flex items-center space-x-1 bg-slate-800/90 border border-slate-700/60 p-1 rounded-xl">
+              <button
+                onClick={() => handleSpeedChange(Math.max(0.25, +(speed - 0.25).toFixed(2)))}
+                disabled={speed <= 0.25}
+                className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-700/70 hover:bg-slate-600 text-slate-200 font-bold transition disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Decrease speed by 0.25x"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <div className="px-2 text-center min-w-[50px]">
+                <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Speed</div>
+                <div className="text-xs font-mono font-bold text-cyan-400">{speed.toFixed(2)}x</div>
+              </div>
+              <button
+                onClick={() => handleSpeedChange(Math.min(3.0, +(speed + 0.25).toFixed(2)))}
+                disabled={speed >= 3.0}
+                className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-700/70 hover:bg-slate-600 text-slate-200 font-bold transition disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Increase speed by 0.25x"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             <div className="flex items-center space-x-1.5 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/60">
@@ -291,6 +307,7 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({ data, loading, o
                 value={volume}
                 onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
                 className="w-14 accent-cyan-400 cursor-pointer"
+                title="Volume"
               />
             </div>
           </div>

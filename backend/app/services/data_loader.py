@@ -50,6 +50,13 @@ class SARDataLoader:
     def get_heartbeat_image(self, region_id: str, frame: Optional[str] = None) -> Optional[bytes]:
         region_dir = os.path.join(self.data_root, region_id)
         if frame:
+            # Check frames subdirectory for high-density multi-epoch sequence
+            frame_clean = frame.replace(".png", "")
+            frame_subpath = os.path.join(region_dir, "frames", f"{frame_clean}.png")
+            if os.path.exists(frame_subpath):
+                with open(frame_subpath, "rb") as f:
+                    return f.read()
+
             frame_map = {
                 "spring": "heartbeat_spring_flood.png",
                 "summer": "heartbeat_summer_peak.png",
