@@ -85,9 +85,16 @@ def process_sentinel1_zip(zip_path: str, output_dir: str = None):
             out_rows = []
             
             with z.open(tiff_member_name) as f:
+                # Dynamically retrieve base strip offset from Tag 273
+                try:
+                    f.seek(848115972)
+                    base_offset = struct.unpack('<I', f.read(4))[0]
+                except Exception:
+                    base_offset = 133987
+                    
                 for line_idx in range(min_line, max_line, step):
                     # Seek to start of this line's crop window
-                    offset = 8 + (line_idx * line_stride) + (min_pixel * 2)
+                    offset = base_offset + (line_idx * line_stride) + (min_pixel * 2)
                     f.seek(offset)
                     raw_bytes = f.read(crop_w * 2)
                     # Unpack little-endian uint16
