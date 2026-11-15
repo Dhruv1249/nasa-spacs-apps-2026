@@ -12,33 +12,40 @@ interface MapViewProps {
 }
 
 const BASEMAPS = {
-  dark: {
-    id: "dark",
-    name: "Dark Neon",
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  hybrid: {
+    id: "hybrid",
+    name: "Google Satellite",
+    url: "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
     options: {
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a> & NASA',
-      maxZoom: 19,
-      subdomains: "abcd",
+      attribution: '&copy; Google Maps & NASA',
+      maxZoom: 20,
     },
   },
-  satellite: {
-    id: "satellite",
-    name: "Optical Satellite",
+  esriSat: {
+    id: "esriSat",
+    name: "ESRI Optical",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     options: {
       attribution: '&copy; Esri, Maxar, Earthstar Geographics',
       maxZoom: 19,
     },
   },
-  voyager: {
-    id: "voyager",
-    name: "Terrain",
-    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+  dark: {
+    id: "dark",
+    name: "Dark Canvas",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     options: {
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a> & OpenStreetMap',
-      maxZoom: 19,
-      subdomains: "abcd",
+      attribution: '&copy; Esri, HERE, Garmin',
+      maxZoom: 16,
+    },
+  },
+  terrain: {
+    id: "terrain",
+    name: "Terrain Relief",
+    url: "https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}",
+    options: {
+      attribution: '&copy; Google Maps',
+      maxZoom: 20,
     },
   },
 };
@@ -54,7 +61,7 @@ export const MapView: React.FC<MapViewProps> = ({
   const overlayRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
 
-  const [basemapKey, setBasemapKey] = useState<"dark" | "satellite" | "voyager">("dark");
+  const [basemapKey, setBasemapKey] = useState<keyof typeof BASEMAPS>("hybrid");
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75);
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
 

@@ -30,88 +30,143 @@ def generate_region_dataset(
     lats = np.linspace(max_lat, min_lat, height)
     xx, yy = np.meshgrid(np.linspace(0, 1, width), np.linspace(0, 1, height))
     
+    rng = np.random.default_rng(42 if region_id == "sacramento" else 1337)
+    
     # Spatial terrain synthesis
-    # 1. River channel running through region
-    river_x = 0.45 + 0.08 * np.sin(yy * 3.0 * np.pi) + 0.03 * np.cos(yy * 7.0 * np.pi)
-    river_mask = np.abs(xx - river_x) < 0.025
-    
-    # 2. Field parcel grid simulation (checkerboard agricultural parcels)
-    parcel_scale = 30.0
-    parcel_id = (np.floor(xx * parcel_scale) * 17.0 + np.floor(yy * parcel_scale) * 31.0) % 7
-    
+    # 1. Realistic meandering river channel
+    if region_id == "sacramento":
+        river_x = 0.44 + 0.08 * np.sin(yy * 3.2 * np.pi) + 0.04 * np.cos(yy * 6.5 * np.pi) + 0.02 * np.sin(yy * 12.0 * np.pi)
+        river_dist = np.abs(xx - river_x)
+        river_mask = river_dist < 0.018
+        # Riparian forest corridor along river banks
+        riparian_mask = (river_dist >= 0.018) & (river_dist < 0.038)
+        
+        # Rotated grid matching Sacramento Valley geological axis (~14 degrees)
+        theta = np.radians(14)
+        x_rot = xx * np.cos(theta) - yy * np.sin(theta)
+        y_rot = xx * np.sin(theta) + yy * np.cos(theta)
+        
+        # Multi-scale rectangular agricultural parcels (typical 40-160 acre parcels)
+        px = np.floor(x_rot * 32.0)
+        py = np.floor(y_rot * 18.0)
+        parcel_id = ((px * 43 + py * 89) % 23).astype(int)
+        
+        # Per-parcel planting offset (DOY shift between fields)
+        parcel_offset = ((px * 17 + py * 31) % 25 - 12).astype(float)
+    else:
+        # Punjab: Sutlej river in the north, canal networks, smaller parcel sizes
+        river_x = 0.50 + 0.15 * np.sin(yy * 2.8 * np.pi) + 0.03 * np.cos(yy * 5.0 * np.pi)
+        river_dist = np.abs(xx - river_x)
+        river_mask = river_dist < 0.022
+        riparian_mask = (river_dist >= 0.022) & (river_dist < 0.040)
+        
+        # Dense smaller farm plots (intensive Punjab canal colonies)
+        theta = np.radians(8)
+        x_rot = xx * np.cos(theta) - yy * np.sin(theta)
+        y_rot = xx * np.sin(theta) + yy * np.cos(theta)
+        px = np.floor(x_rot * 45.0)
+        py = np.floor(y_rot * 35.0)
+        parcel_id = ((px * 37 + py * 71) % 29).astype(int)
+        parcel_offset = ((px * 13 + py * 23) % 21 - 10).astype(float)
+
+    # Road and ditch grid boundaries (subtle specular line features)
+    road_x = (np.abs(x_rot * (32.0 if region_id == "sacramento" else 45.0) - px - 0.5) > 0.47)
+    road_y = (np.abs(y_rot * (18.0 if region_id == "sacramento" else 35.0) - py - 0.5) > 0.47)
+    boundary_mask = (road_x | road_y) & (~river_mask)
+
     # 3. Time series synthesis based on region phenology
     copol_stack = np.zeros((num_dates, height, width), dtype=np.float32)
     crosspol_stack = np.zeros((num_dates, height, width), dtype=np.float32)
     
-    rng = np.random.default_rng(42 if region_id == "sacramento" else 1337)
-    
     for t_idx, doy in enumerate(doys):
-        # Default grassland / pasture
-        cp = -15.0 + 2.5 * np.sin(2.0 * np.pi * (doy - 120) / 365.0)
-        xp = -23.0 + 2.0 * np.sin(2.0 * np.pi * (doy - 120) / 365.0)
+        # Effective DOY with realistic field-to-field planting variation
+        eff_doy = np.clip(doy + parcel_offset, 1.0, 365.0)
         
-        copol = np.full((height, width), cp, dtype=np.float32)
-        crosspol = np.full((height, width), xp, dtype=np.float32)
+        # Default pasture / fallow background
+        cp = -15.0 + 2.5 * np.sin(2.0 * np.pi * (eff_doy - 120) / 365.0)
+        xp = -23.0 + 2.0 * np.sin(2.0 * np.pi * (eff_doy - 120) / 365.0)
+        
+        copol = np.copy(cp).astype(np.float32)
+        crosspol = np.copy(xp).astype(np.float32)
         
         if region_id == "sacramento":
-            # Type 0, 1, 2: Rice paddies (flooded in spring, peak canopy in Aug, harvest in Oct)
-            rice_mask = (parcel_id < 3) & (~river_mask)
+            # 1. Flooded Rice Basins (Sutter Basin, Colusa, Natomas)
+            rice_mask = (parcel_id < 14) & (~river_mask) & (~riparian_mask)
             
-            if doy < 100:  # Winter bare/wet
-                rice_cp = -16.0
-                rice_xp = -24.0
-            elif 100 <= doy < 140:  # Spring flooding (drop!)
-                rice_cp = -22.5 + (doy - 100) * 0.05
-                rice_xp = -28.0
-            elif 140 <= doy < 240:  # Vegetative surge
-                progress = (doy - 140) / 100.0
-                rice_cp = -20.5 + progress * 12.0  # reaches -8.5 dB
-                rice_xp = -26.0 + progress * 13.0  # reaches -13.0 dB
-            elif 240 <= doy < 280:  # Maturation & pre-harvest
-                rice_cp = -9.0 - (doy - 240) * 0.05
-                rice_xp = -13.5 - (doy - 240) * 0.05
-            else:  # Post-harvest stubble / winter flood
-                rice_cp = -17.0
-                rice_xp = -25.0
-                
-            copol[rice_mask] = rice_cp
-            crosspol[rice_mask] = rice_xp
+            # Vectorized piecewise rice phenology
+            is_winter = eff_doy < 100
+            is_flood = (eff_doy >= 100) & (eff_doy < 140)
+            is_growth = (eff_doy >= 140) & (eff_doy < 240)
+            is_mature = (eff_doy >= 240) & (eff_doy < 280)
+            is_post = eff_doy >= 280
             
-            # Type 3, 4: Permanent Walnut / Almond Orchards (consistent high volume scattering)
-            orchard_mask = ((parcel_id == 3) | (parcel_id == 4)) & (~river_mask)
-            copol[orchard_mask] = -10.5 + 1.2 * np.sin(2.0 * np.pi * (doy - 150) / 365.0)
-            crosspol[orchard_mask] = -15.8 + 1.0 * np.sin(2.0 * np.pi * (doy - 150) / 365.0)
+            growth_prog = (eff_doy - 140.0) / 100.0
             
-            # Type 5: Urban / Built-up (high backscatter, flat line)
-            urban_mask = (parcel_id == 5) & (xx < 0.3) & (yy > 0.65) & (~river_mask)
+            rice_cp = np.where(
+                is_winter, -16.2,
+                np.where(
+                    is_flood, -22.5 + (eff_doy - 100.0) * 0.05,
+                    np.where(
+                        is_growth, -20.5 + growth_prog * 12.0,
+                        np.where(is_mature, -9.0 - (eff_doy - 240.0) * 0.05, -17.0)
+                    )
+                )
+            )
+            rice_xp = np.where(
+                is_winter, -24.0,
+                np.where(
+                    is_flood, -28.0,
+                    np.where(
+                        is_growth, -26.0 + growth_prog * 13.0,
+                        np.where(is_mature, -13.5 - (eff_doy - 240.0) * 0.05, -25.0)
+                    )
+                )
+            )
+            copol[rice_mask] = rice_cp[rice_mask]
+            crosspol[rice_mask] = rice_xp[rice_mask]
+            
+            # 2. Permanent Walnut & Almond Orchards (consistent high volume canopy)
+            orchard_mask = ((parcel_id >= 14) & (parcel_id < 20)) & (~river_mask) & (~riparian_mask)
+            copol[orchard_mask] = -10.5 + 1.2 * np.sin(2.0 * np.pi * (eff_doy[orchard_mask] - 150) / 365.0)
+            crosspol[orchard_mask] = -15.8 + 1.0 * np.sin(2.0 * np.pi * (eff_doy[orchard_mask] - 150) / 365.0)
+            
+            # 3. Riparian tree buffer along Sacramento riverbank
+            copol[riparian_mask] = -10.8 + 0.8 * np.sin(2.0 * np.pi * (doy - 160) / 365.0)
+            crosspol[riparian_mask] = -15.2 + 0.9 * np.sin(2.0 * np.pi * (doy - 160) / 365.0)
+
+            # 4. Built-up / Urban (Woodland, Yuba City cluster)
+            urban_mask = (parcel_id >= 20) & (xx < 0.35) & (yy > 0.60) & (~river_mask)
             copol[urban_mask] = -6.5
             crosspol[urban_mask] = -13.0
 
-        else: # Punjab (Dual Kharif Rice + Rabi Wheat rotation)
-            agri_mask = (parcel_id < 5) & (~river_mask)
-            # Peak 1: Rabi Wheat (peaks around DOY 70 in March)
-            rabi_peak = 6.0 * np.exp(-((doy - 70) ** 2) / (2 * (30 ** 2)))
-            # Peak 2: Kharif Rice (peaks around DOY 245 in September)
-            kharif_peak = 7.5 * np.exp(-((doy - 245) ** 2) / (2 * (35 ** 2)))
+        else: # Punjab (Intensive Kharif Rice + Rabi Wheat Dual Rotation)
+            agri_mask = (parcel_id < 22) & (~river_mask) & (~riparian_mask)
+            
+            rabi_peak = 6.0 * np.exp(-((eff_doy - 70) ** 2) / (2 * (28 ** 2)))
+            kharif_peak = 7.5 * np.exp(-((eff_doy - 245) ** 2) / (2 * (32 ** 2)))
             
             punjab_cp = -16.5 + rabi_peak + kharif_peak
             punjab_xp = -24.0 + (rabi_peak * 0.9) + (kharif_peak * 1.1)
             
-            if 150 <= doy <= 175: # Kharif initial puddling/flooding
-                punjab_cp -= 4.0
-                punjab_xp -= 3.5
-                
-            copol[agri_mask] = punjab_cp
-            crosspol[agri_mask] = punjab_xp
+            is_puddling = (eff_doy >= 150) & (eff_doy <= 175)
+            punjab_cp = np.where(is_puddling, punjab_cp - 4.0, punjab_cp)
+            punjab_xp = np.where(is_puddling, punjab_xp - 3.5, punjab_xp)
             
-            # Urban center (e.g. Ludhiana cluster)
-            urban_mask = (parcel_id == 5) & (xx > 0.6) & (yy > 0.5) & (~river_mask)
-            copol[urban_mask] = -6.0
-            crosspol[urban_mask] = -12.5
+            copol[agri_mask] = punjab_cp[agri_mask]
+            crosspol[agri_mask] = punjab_xp[agri_mask]
+            
+            # Riparian greenery along Sutlej River
+            copol[riparian_mask] = -11.2 + 0.9 * np.sin(2.0 * np.pi * (doy - 230) / 365.0)
+            crosspol[riparian_mask] = -16.0 + 0.8 * np.sin(2.0 * np.pi * (doy - 230) / 365.0)
 
-        # Open water body (River)
-        copol[river_mask] = -23.5
-        crosspol[river_mask] = -29.0
+            # Urban cluster (Ludhiana industrial corridors)
+            urban_mask = (parcel_id >= 22) & (xx > 0.55) & (yy > 0.45) & (~river_mask)
+            copol[urban_mask] = -5.8
+            crosspol[urban_mask] = -12.0
+
+        # Open water body (Specular radar drop)
+        copol[river_mask] = -24.5
+        crosspol[river_mask] = -30.0
         
         # Add realistic multiplicative SAR speckle (Rayleigh-like noise)
         speckle_cp = rng.normal(0.0, 0.55, (height, width)).astype(np.float32)
