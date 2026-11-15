@@ -423,18 +423,30 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({
         </div>
 
         <div
-          className="relative w-full bg-canvas-subtle rounded-xl p-3 border border-ice overflow-hidden cursor-pointer hover:border-coral transition shadow-inner"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const clickX = e.clientX - rect.left - 12;
-            const usableWidth = rect.width - 24;
-            const progress = Math.max(0, Math.min(1, clickX / usableWidth));
-            const targetIndex = Math.round(progress * (activeSeries.length - 1));
-            setActiveStep(targetIndex);
-            if (sonifierRef.current) sonifierRef.current.seekToStep(targetIndex);
-          }}
+          className="relative w-full bg-canvas-subtle rounded-xl p-3 border border-ice overflow-hidden select-none hover:border-coral transition shadow-inner"
         >
-          <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-20 overflow-visible">
+          <svg
+            viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+            preserveAspectRatio="none"
+            className="w-full h-20 block cursor-crosshair overflow-visible touch-none"
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              const rect = e.currentTarget.getBoundingClientRect();
+              const progress = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              const targetIndex = Math.round(progress * (activeSeries.length - 1));
+              setActiveStep(targetIndex);
+              if (sonifierRef.current) sonifierRef.current.seekToStep(targetIndex);
+            }}
+            onPointerMove={(e) => {
+              if (e.buttons === 1) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const progress = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                const targetIndex = Math.round(progress * (activeSeries.length - 1));
+                setActiveStep(targetIndex);
+                if (sonifierRef.current) sonifierRef.current.seekToStep(targetIndex);
+              }
+            }}
+          >
             <line x1="0" y1={getY(-10)} x2={chartWidth} y2={getY(-10)} stroke="#cdd7d6" strokeDasharray="2 2" />
             <line x1="0" y1={getY(-20)} x2={chartWidth} y2={getY(-20)} stroke="#cdd7d6" strokeDasharray="2 2" />
 
@@ -444,7 +456,7 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({
             <polyline fill="none" stroke="#102542" strokeWidth={isDecadal ? "1.0" : "1.8"} points={copolPoints} />
             <polyline fill="none" stroke="#f87060" strokeWidth={isDecadal ? "1.0" : "1.8"} points={crosspolPoints} />
 
-            <line x1={activeX} y1="0" x2={activeX} y2={chartHeight} stroke="#f87060" strokeWidth="2.2" />
+            <line x1={activeX} y1="0" x2={activeX} y2={chartHeight} stroke="#f87060" strokeWidth="2.0" />
             <circle cx={activeX} cy={getY(currentNote.copol_db)} r="3.5" fill="#f87060" stroke="#ffffff" strokeWidth="1.5" />
           </svg>
 
