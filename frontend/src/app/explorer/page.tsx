@@ -36,6 +36,7 @@ function ExplorerContent() {
   const [activeTimelineDate, setActiveTimelineDate] = useState<string>("");
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(0.5);
+  const [activeStep, setActiveStep] = useState<number>(0);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState<boolean>(false);
 
   // Load regions from API or fallback
@@ -120,6 +121,7 @@ function ExplorerContent() {
             onTogglePlay={() => setIsPlaying(!isPlaying)}
             speed={playbackSpeed}
             onSpeedChange={(s) => setPlaybackSpeed(s)}
+            onStepDelta={(delta) => setActiveStep((prev) => Math.max(0, prev + delta))}
           />
         </section>
 
@@ -135,6 +137,8 @@ function ExplorerContent() {
             onSpeedChange={(s) => setPlaybackSpeed(s)}
             isCollapsed={isInspectorCollapsed}
             onToggleCollapse={() => setIsInspectorCollapsed(!isInspectorCollapsed)}
+            activeStep={activeStep}
+            onStepChange={setActiveStep}
           />
         </section>
       </main>

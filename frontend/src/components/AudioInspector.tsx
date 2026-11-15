@@ -30,7 +30,8 @@ interface AudioInspectorProps {
   onSpeedChange?: (speed: number) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
-  onStepDelta?: (delta: number) => void;
+  activeStep?: number;
+  onStepChange?: (step: number | ((prev: number) => number)) => void;
 }
 
 export const AudioInspector: React.FC<AudioInspectorProps> = ({
@@ -43,15 +44,19 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({
   onSpeedChange: externalOnSpeedChange,
   isCollapsed = false,
   onToggleCollapse,
+  activeStep: externalActiveStep,
+  onStepChange: externalOnStepChange,
 }) => {
   const [timelineMode, setTimelineMode] = useState<"annual" | "decadal">("annual");
   const [internalIsPlaying, setInternalIsPlaying] = useState<boolean>(false);
-  const [activeStep, setActiveStep] = useState<number>(0);
+  const [internalActiveStep, setInternalActiveStep] = useState<number>(0);
   const [volume, setVolume] = useState<number>(0.85);
   const [internalSpeed, setInternalSpeed] = useState<number>(0.5);
 
   const speed = externalSpeed !== undefined ? externalSpeed : internalSpeed;
   const isPlaying = externalIsPlaying !== undefined ? externalIsPlaying : internalIsPlaying;
+  const activeStep = externalActiveStep !== undefined ? externalActiveStep : internalActiveStep;
+  const setActiveStep = externalOnStepChange || setInternalActiveStep;
 
   const sonifierRef = useRef<RadarSonifier | null>(null);
 
@@ -107,16 +112,20 @@ export const AudioInspector: React.FC<AudioInspectorProps> = ({
     if (activeNotes.length > 0 && activeStep < activeNotes.length) {
       const cur = activeNotes[activeStep];
       if (onActiveEpochChange && cur) {
-        const doy = cur.doy;
-        let seasonFrame = "epoch_14";
-        if (doy >= 80 && doy < 150) seasonFrame = "epoch_08";
-        else if (doy >= 150 && doy < 260) seasonFrame = "epoch_14";
-        else if (doy >= 260 && doy < 330) seasonFrame = "epoch_19";
+        let frameId = "harmonic";
+        if (timelineMode === "annual") {
+          // Map to 25 individual bi-weekly satellite radar photos (epoch_00 to epoch_24)
+          frameId = `epoch_${String(activeStep % 25).padStart(2, "0")}`;
+        } else {
+          // 10-Year Decadal Mode: each of the 244 passes has its own calibrated satellite photo!
+          const decadalIdx = Math.min(243, Math.max(0, activeStep));
+          frameId = `decadal_${String(decadalIdx).padStart(3, "0")}`;
+        }
 
-        onActiveEpochChange(cur.date, doy, seasonFrame);
+        onActiveEpochChange(cur.date, cur.doy, frameId);
       }
     }
-  }, [activeStep, activeNotes, onActiveEpochChange]);
+  }, [activeStep, activeNotes, timelineMode, onActiveEpochChange]);
 
   const handleTogglePlay = async () => {
     if (externalTogglePlay) {

@@ -208,7 +208,7 @@ export const MapView: React.FC<MapViewProps> = ({
       ];
 
       const border = L.rectangle(bounds, {
-        color: "#f87060",
+        color: "#06b6d4",
         weight: 1.8,
         dashArray: "4, 6",
         fill: false,
