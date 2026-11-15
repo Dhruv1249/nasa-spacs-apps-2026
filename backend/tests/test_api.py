@@ -40,6 +40,10 @@ class TestAPIEndpoints(unittest.TestCase):
         self.assertIn("time_series", data)
         self.assertGreater(len(data["time_series"]), 10)
         self.assertIn("note_events", data["sonification"])
+        self.assertIn("decadal_time_series", data)
+        self.assertGreater(len(data["decadal_time_series"]), 100)
+        self.assertIn("decadal_sonification", data)
+        self.assertEqual(data["decadal_sonification"]["total_epochs"], len(data["decadal_time_series"]))
 
     def test_point_query_punjab(self):
         res = self.client.get("/api/point?region=punjab&lat=30.90&lon=75.85")
@@ -48,6 +52,8 @@ class TestAPIEndpoints(unittest.TestCase):
         self.assertEqual(data["region"], "punjab")
         self.assertIn("harmonic", data)
         self.assertIn("sonification", data)
+        self.assertIn("decadal_time_series", data)
+        self.assertGreater(len(data["decadal_time_series"]), 100)
 
 if __name__ == "__main__":
     unittest.main()

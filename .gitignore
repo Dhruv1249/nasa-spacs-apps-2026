@@ -33,6 +33,8 @@ Thumbs.db
 *.h5
 *.hdf5
 *.npz
+*.tif
+*.tiff
 *.SAFE/
 backend/data/raw/
 .gcloud_adc.json

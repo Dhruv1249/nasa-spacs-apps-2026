@@ -41,6 +41,12 @@ class SARDataLoader:
                         self.cache[region_id] = {}
                     self.cache[region_id]["heartbeat_png_bytes"] = f.read()
 
+            decadal_path = os.path.join(region_dir, "decadal_timeseries.json")
+            if os.path.exists(decadal_path):
+                import json
+                with open(decadal_path) as f:
+                    self.cache[region_id]["decadal_data"] = json.load(f)
+
     def get_heartbeat_image(self, region_id: str) -> Optional[bytes]:
         region_data = self.cache.get(region_id)
         if region_data and "heartbeat_png_bytes" in region_data:
@@ -101,6 +107,63 @@ class SARDataLoader:
                 "fitted_dB": round(float(fitted_val), 2)
             })
             
+        # Check for 10-Year Decadal data
+        decadal_series = []
+        decadal_sonification = None
+        if "decadal_data" in data:
+            decadal_dict = data["decadal_data"]
+            # Map archetype or pick matching site
+            archetype_key = None
+            if "Rice" in sonification["classification"]["type"]:
+                archetype_key = [k for k in decadal_dict if "Rice" in k or "Wheat-Rice" in k]
+            elif "Water" in sonification["classification"]["type"]:
+                archetype_key = [k for k in decadal_dict if "River" in k]
+            elif "Orchard" in sonification["classification"]["type"] or "Forest" in sonification["classification"]["type"]:
+                archetype_key = [k for k in decadal_dict if "Orchard" in k or "Canal" in k]
+            elif "Urban" in sonification["classification"]["type"]:
+                archetype_key = [k for k in decadal_dict if "Urban" in k]
+
+            chosen_key = archetype_key[0] if (archetype_key and len(archetype_key) > 0) else list(decadal_dict.keys())[0]
+            site_data = decadal_dict[chosen_key]
+            
+            dec_dates = site_data.get("dates", [])
+            dec_vv = site_data.get("vv_db", [])
+            dec_vh = site_data.get("vh_db", [])
+            dec_ratio = site_data.get("ratio_db", [])
+            
+            dec_notes = []
+            for dd, v, h, r in zip(dec_dates, dec_vv, dec_vh, dec_ratio):
+                decadal_series.append({
+                    "date": dd,
+                    "doy": int(dd.split("-")[1]) * 30 + int(dd.split("-")[2]),
+                    "copol_dB": v,
+                    "crosspol_dB": h,
+                    "ratio_dB": r,
+                    "fitted_dB": v
+                })
+                norm_bio = float(np.clip((h + 28.0) / 18.0, 0.0, 1.0))
+                freq = round(140.0 + (norm_bio ** 1.5) * 520.0, 1)
+                gain = round(float(np.clip((v + 26.0) / 22.0, 0.05, 0.95)), 3)
+                cutoff = round(250.0 + (norm_bio ** 1.2) * 2950.0, 1)
+                dec_notes.append({
+                    "date": dd,
+                    "doy": 0,
+                    "frequency_hz": freq,
+                    "gain": gain,
+                    "filter_cutoff_hz": cutoff,
+                    "copol_db": v,
+                    "crosspol_db": h,
+                    "ratio_db": r
+                })
+                
+            decadal_sonification = {
+                "site_name": chosen_key,
+                "total_epochs": len(dec_dates),
+                "tempo_bpm": 180,
+                "duration_seconds": 22.0,
+                "note_events": dec_notes
+            }
+
         return {
             "region": region_id,
             "coordinates": {
@@ -117,5 +180,7 @@ class SARDataLoader:
                 "duration_seconds": sonification["duration_seconds"],
                 "note_events": sonification["note_events"]
             },
-            "time_series": time_series
+            "time_series": time_series,
+            "decadal_time_series": decadal_series,
+            "decadal_sonification": decadal_sonification
         }

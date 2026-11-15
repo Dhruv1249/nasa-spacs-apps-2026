@@ -8,6 +8,7 @@ export class RadarSonifier {
   private noteEvents: NoteEvent[] = [];
   private volume: number = 0.8;
   private speedMultiplier: number = 1.0;
+  private baseNoteDuration: number = 0.15;
   private onStepCallback: ((index: number) => void) | null = null;
 
   constructor() {}
@@ -26,6 +27,10 @@ export class RadarSonifier {
     this.stop();
     this.noteEvents = events;
     this.currentStep = 0;
+  }
+
+  public setBaseNoteDuration(duration: number) {
+    this.baseNoteDuration = Math.max(0.03, Math.min(1.0, duration));
   }
 
   public setOnStepCallback(cb: (index: number) => void) {
@@ -73,7 +78,7 @@ export class RadarSonifier {
 
     const note = this.noteEvents[this.currentStep];
     const now = this.ctx.currentTime;
-    const noteDuration = (0.15 / this.speedMultiplier);
+    const noteDuration = (this.baseNoteDuration / this.speedMultiplier);
 
     // Audio Graph:
     // Osc1 (Carrier) + Osc2 (Sub-octave warmth) -> Filter -> Gain -> Destination
@@ -96,9 +101,10 @@ export class RadarSonifier {
     filter.Q.setValueAtTime(3.0, now);
 
     // Envelope shaping (Attack - Decay)
+    const attackTime = Math.min(0.015, noteDuration * 0.2);
     const targetGain = note.gain * this.volume * 0.4;
     gainNode.gain.setValueAtTime(0.001, now);
-    gainNode.gain.exponentialRampToValueAtTime(Math.max(0.002, targetGain), now + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(Math.max(0.002, targetGain), now + attackTime);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, now + noteDuration);
 
     // Connect nodes

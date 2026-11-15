@@ -63,4 +63,12 @@ export interface PointQueryResponse {
     note_events: NoteEvent[];
   };
   time_series: TimeSeriesEntry[];
+  decadal_time_series?: TimeSeriesEntry[];
+  decadal_sonification?: {
+    site_name: string;
+    total_epochs: number;
+    tempo_bpm: number;
+    duration_seconds: number;
+    note_events: NoteEvent[];
+  };
 }

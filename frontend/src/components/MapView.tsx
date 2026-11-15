@@ -3,13 +3,45 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Region } from "@/types";
 import { getHeartbeatImageUrl } from "@/lib/api";
-import { Layers, MapPin, Sparkles, Sliders } from "lucide-react";
+import { Layers, MapPin, Sparkles, Sliders, Globe, Eye } from "lucide-react";
 
 interface MapViewProps {
   region: Region;
   onPointSelected: (lat: number, lon: number) => void;
   selectedCoords: { lat: number; lon: number } | null;
 }
+
+const BASEMAPS = {
+  dark: {
+    id: "dark",
+    name: "Dark Neon",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    options: {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a> & NASA',
+      maxZoom: 19,
+      subdomains: "abcd",
+    },
+  },
+  satellite: {
+    id: "satellite",
+    name: "Optical Satellite",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    options: {
+      attribution: '&copy; Esri, Maxar, Earthstar Geographics',
+      maxZoom: 19,
+    },
+  },
+  voyager: {
+    id: "voyager",
+    name: "Terrain",
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    options: {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a> & OpenStreetMap',
+      maxZoom: 19,
+      subdomains: "abcd",
+    },
+  },
+};
 
 export const MapView: React.FC<MapViewProps> = ({
   region,
@@ -18,9 +50,11 @@ export const MapView: React.FC<MapViewProps> = ({
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
   const overlayRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
 
+  const [basemapKey, setBasemapKey] = useState<"dark" | "satellite" | "voyager">("dark");
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75);
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
 
@@ -38,7 +72,7 @@ export const MapView: React.FC<MapViewProps> = ({
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
 
-      if (!mapInstanceRef.current) {
+      if (!mapInstanceRef.current && mapContainerRef.current) {
         const map = L.map(mapContainerRef.current, {
           center: [region.center[1], region.center[0]],
           zoom: region.zoom,
@@ -47,12 +81,9 @@ export const MapView: React.FC<MapViewProps> = ({
 
         L.control.zoom({ position: "bottomright" }).addTo(map);
 
-        // Dark Basemap tile layer
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-          attribution: '&copy; <a href="https://carto.com/">CARTO</a> & NASA',
-          maxZoom: 19,
-          subdomains: "abcd",
-        }).addTo(map);
+        const currentBm = BASEMAPS[basemapKey];
+        const tile = L.tileLayer(currentBm.url, currentBm.options).addTo(map);
+        tileLayerRef.current = tile;
 
         // Click handler to sonify
         map.on("click", (e: any) => {
@@ -71,6 +102,22 @@ export const MapView: React.FC<MapViewProps> = ({
       }
     };
   }, []);
+
+  // Update Basemap Layer
+  useEffect(() => {
+    if (!mapLoaded || !mapInstanceRef.current) return;
+
+    import("leaflet").then((L) => {
+      const map = mapInstanceRef.current;
+      if (tileLayerRef.current) {
+        map.removeLayer(tileLayerRef.current);
+      }
+      const selectedBm = BASEMAPS[basemapKey];
+      const newTile = L.tileLayer(selectedBm.url, selectedBm.options).addTo(map);
+      newTile.bringToBack();
+      tileLayerRef.current = newTile;
+    });
+  }, [basemapKey, mapLoaded]);
 
   // Update center, bounds and Heartbeat Image Overlay on region change
   useEffect(() => {
@@ -154,6 +201,23 @@ export const MapView: React.FC<MapViewProps> = ({
 
       {/* Floating Controls Bar */}
       <div className="absolute top-4 left-4 z-10 flex flex-col space-y-2 pointer-events-auto">
+        {/* Basemap Switcher */}
+        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-1.5 shadow-xl flex items-center space-x-1">
+          {(Object.keys(BASEMAPS) as (keyof typeof BASEMAPS)[]).map((key) => (
+            <button
+              key={key}
+              onClick={() => setBasemapKey(key)}
+              className={`px-2.5 py-1 text-xs rounded-lg font-medium transition ${
+                basemapKey === key
+                  ? "bg-cyan-500 text-slate-950 font-bold shadow"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+              }`}
+            >
+              {BASEMAPS[key].name}
+            </button>
+          ))}
+        </div>
+
         {/* Layer Opacity Controller */}
         <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-3 shadow-xl flex items-center space-x-3 text-xs">
           <Sliders className="w-4 h-4 text-cyan-400" />
